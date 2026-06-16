@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+@theme {
+  /* Daikin brand palette */
+  --color-daikin-50: #e8f6fd;
+  --color-daikin-100: #c6e9fa;
+  --color-daikin-200: #93d6f4;
+  --color-daikin-300: #57bdec;
+  --color-daikin-400: #22a5e0;
+  --color-daikin-500: #0098d8;
+  --color-daikin-600: #0079bd;
+  --color-daikin-700: #0066b3;
+  --color-daikin-800: #004a87;
+  --color-daikin-900: #002f5c;
+  --color-daikin-950: #001f3f;
+
+  --color-navy: #001f54;
+  --color-ink: #0b1f3a;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04),
+    0 8px 24px rgba(16, 24, 40, 0.06);
+  --shadow-soft: 0 10px 40px rgba(0, 102, 179, 0.12);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: #eef4fb;
+  color: #0b1f3a;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Brand gradients */
+.bg-daikin-gradient {
+  background: linear-gradient(135deg, #001f54 0%, #003d82 45%, #0066b3 100%);
+}
+.bg-daikin-btn {
+  background: linear-gradient(90deg, #004a87 0%, #0066b3 50%, #0098d8 100%);
+}
+.bg-daikin-hub {
+  background: linear-gradient(135deg, #003a78 0%, #0a6fb0 55%, #1fa6d8 100%);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-thumb {
+  background: #c3d4e6;
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a7bfd6;
+}
+
+/* Utilities */
+.glass {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.55),
+    transparent
+  );
+  animation: shimmer 1.4s infinite;
+}
+
+@keyframes scanline {
+  0% {
+    top: 6%;
+  }
+  100% {
+    top: 94%;
+  }
+}
+.scanline {
+  animation: scanline 1.8s ease-in-out infinite alternate;
+}
