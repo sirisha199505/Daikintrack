@@ -7,10 +7,7 @@ const EMPTY = {
   name: "",
   category: "split",
   branchId: "north",
-  barcode: "",
   stock: 0,
-  lowStockThreshold: 10,
-  price: 0,
 };
 
 function Field({ label, children }) {
@@ -32,6 +29,7 @@ export default function ProductFormModal({
   onClose,
   initial,
   lockBranch,
+  scanCode,
   onSaved,
 }) {
   const { categories, branches, addProduct, updateProduct } = useInventory();
@@ -46,12 +44,16 @@ export default function ProductFormModal({
       setForm(
         initial
           ? { ...EMPTY, ...initial }
-          : { ...EMPTY, branchId: lockBranch || "north" }
+          : {
+              ...EMPTY,
+              branchId: lockBranch || branches[0]?.id || "north",
+              category: categories[0]?.id || EMPTY.category,
+            }
       );
       setErrors({});
       /* eslint-enable react-hooks/set-state-in-effect */
     }
-  }, [open, initial, lockBranch]);
+  }, [open, initial, lockBranch, categories, branches]);
 
   function set(k, v) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -61,7 +63,6 @@ export default function ProductFormModal({
     e.preventDefault();
     const errs = {};
     if (!form.name.trim()) errs.name = "Required";
-    if (!String(form.barcode).trim()) errs.barcode = "Required";
     if (Number(form.stock) < 0) errs.stock = "Invalid";
     if (Object.keys(errs).length) return setErrors(errs);
 
@@ -69,10 +70,11 @@ export default function ProductFormModal({
     const payload = {
       ...form,
       stock: Number(form.stock),
-      price: Number(form.price),
-      lowStockThreshold: Number(form.lowStockThreshold),
       categoryName: cat?.name,
     };
+    // A barcode scanned in Check-In ("Add Product Manually") keeps the new
+    // product matchable by that code.
+    if (!isEdit && scanCode) payload.barcode = String(scanCode).trim();
     if (isEdit) updateProduct(initial.id, payload);
     else addProduct(payload);
     onSaved?.(isEdit);
@@ -129,47 +131,18 @@ export default function ProductFormModal({
           </Field>
         </div>
 
-        <Field label="Barcode">
+        <Field label="Stock Quantity">
           <input
-            className={`${inputCls} font-mono`}
-            value={form.barcode}
-            onChange={(e) => set("barcode", e.target.value)}
-            placeholder="13-digit EAN"
+            type="number"
+            min="0"
+            className={inputCls}
+            value={form.stock}
+            onChange={(e) => set("stock", e.target.value)}
           />
-          {errors.barcode && (
-            <span className="text-xs text-red-500">{errors.barcode}</span>
+          {errors.stock && (
+            <span className="text-xs text-red-500">{errors.stock}</span>
           )}
         </Field>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Field label="Stock Qty">
-            <input
-              type="number"
-              min="0"
-              className={inputCls}
-              value={form.stock}
-              onChange={(e) => set("stock", e.target.value)}
-            />
-          </Field>
-          <Field label="Low Stock At">
-            <input
-              type="number"
-              min="0"
-              className={inputCls}
-              value={form.lowStockThreshold}
-              onChange={(e) => set("lowStockThreshold", e.target.value)}
-            />
-          </Field>
-          <Field label="Unit Price (₹)">
-            <input
-              type="number"
-              min="0"
-              className={inputCls}
-              value={form.price}
-              onChange={(e) => set("price", e.target.value)}
-            />
-          </Field>
-        </div>
 
         <div className="flex justify-end gap-3 pt-2">
           <Button type="button" variant="subtle" onClick={onClose}>

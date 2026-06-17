@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "../../context/AuthContext";
 import { NAV } from "./navConfig";
-import { classNames } from "../../utils/format";
+import { classNames, roleLabel } from "../../utils/format";
 
 export default function Sidebar({ onNavigate }) {
   const { user } = useAuth();
@@ -59,7 +59,7 @@ export default function Sidebar({ onNavigate }) {
               {user.name}
             </div>
             <div className="text-[11px] font-semibold uppercase tracking-wide text-daikin-600">
-              {user.role === "admin" ? "STORE MANAGER" : "DISTRIBUTOR"}
+              {roleLabel(user.role)}
             </div>
           </div>
         </div>

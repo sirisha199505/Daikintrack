@@ -27,7 +27,10 @@ export const BRANCHES = [
     name: "North Hub",
     code: "WH-NORTH",
     location: "Delhi NCR",
+    address: "Plot 12, Udyog Vihar Phase IV, Gurugram, Haryana 122015",
+    contact: "+91 11 4055 1200",
     manager: "Rahul Verma",
+    status: "Active",
     color: "#0098d8",
     gradient: "linear-gradient(135deg, #0c4a6e 0%, #0284c7 50%, #06b6d4 100%)",
   },
@@ -36,7 +39,10 @@ export const BRANCHES = [
     name: "West Hub",
     code: "WH-WEST",
     location: "Mumbai",
+    address: "Warehouse 7, MIDC Andheri East, Mumbai, Maharashtra 400093",
+    contact: "+91 22 6712 4400",
     manager: "Priya Nair",
+    status: "Active",
     color: "#8b5cf6",
     gradient: "linear-gradient(135deg, #312e81 0%, #7c3aed 50%, #d946ef 100%)",
   },
@@ -45,7 +51,10 @@ export const BRANCHES = [
     name: "South Hub",
     code: "WH-SOUTH",
     location: "Bengaluru",
+    address: "No. 45, Bommasandra Industrial Area, Bengaluru, Karnataka 560099",
+    contact: "+91 80 4123 7700",
     manager: "Arjun Reddy",
+    status: "Active",
     color: "#16a34a",
     gradient: "linear-gradient(135deg, #065f46 0%, #0d9488 50%, #0ea5e9 100%)",
   },
@@ -54,7 +63,10 @@ export const BRANCHES = [
     name: "East Hub",
     code: "WH-EAST",
     location: "Kolkata",
+    address: "Unit 3, Salt Lake Sector V, Kolkata, West Bengal 700091",
+    contact: "+91 33 4011 9900",
     manager: "Sneha Das",
+    status: "Active",
     color: "#f59e0b",
     gradient: "linear-gradient(135deg, #9f1239 0%, #ea580c 50%, #f59e0b 100%)",
   },
@@ -192,6 +204,37 @@ BRANCHES.forEach((branch, bIdx) => {
   });
 });
 
+// Engineer a spread of low-stock items across branches & categories so the
+// "Low Stock by store & category" chart has realistic sample data.
+const LOW_STOCK_TARGETS = [
+  ["north", "vrv"],
+  ["north", "cassette"],
+  ["west", "split"],
+  ["west", "purifier"],
+  ["south", "ducted"],
+  ["south", "window"],
+  ["east", "chillers"],
+  ["east", "vrv"],
+  ["east", "split"],
+];
+LOW_STOCK_TARGETS.forEach(([branchId, catId], i) => {
+  const p = PRODUCTS.find((x) => x.branchId === branchId && x.category === catId);
+  if (p) p.stock = 2 + (i % 6); // 2..7 units, below the threshold of 10
+});
+
+// Engineer some fully out-of-stock categories (every product in the
+// branch+category set to 0) to demonstrate the 0 / out-of-stock state.
+const OUT_OF_STOCK_TARGETS = [
+  ["west", "chillers"],
+  ["south", "purifier"],
+  ["east", "window"],
+];
+OUT_OF_STOCK_TARGETS.forEach(([branchId, catId]) => {
+  PRODUCTS.forEach((p) => {
+    if (p.branchId === branchId && p.category === catId) p.stock = 0;
+  });
+});
+
 // ----- Seed transaction history -----
 function isoDaysAgo(days, hour, min) {
   // 2026-06-16 is "today"; build dates by subtracting days
@@ -227,25 +270,45 @@ for (let i = 0; i < 64; i++) {
 TRANSACTIONS.sort((a, b) => new Date(b.date) - new Date(a.date));
 
 // ----- Demo users -----
+// Three roles: admin (super user), store_manager (operational), distributor (reporting).
 export const USERS = [
   {
     id: "u-admin",
-    name: "Vikram Daikin",
+    name: "System Admin",
     role: "admin",
-    title: "Store Manager",
+    title: "Admin",
     username: "admin",
     password: "admin",
+    email: "admin@daikin.in",
+    mobile: "+91 98100 00001",
     branchId: null,
+    status: "Active",
+    initials: "A",
+  },
+  {
+    id: "u-store",
+    name: "Vikram Daikin",
+    role: "store_manager",
+    title: "Store Manager",
+    username: "vikram",
+    password: "manager",
+    email: "vikram@daikin.in",
+    mobile: "+91 98100 00002",
+    branchId: "north",
+    status: "Active",
     initials: "V",
   },
   {
-    id: "u-north",
+    id: "u-dist",
     name: "Rahul Verma",
-    role: "manager",
+    role: "distributor",
     title: "Distributor",
     username: "rahul",
     password: "manager",
+    email: "rahul@daikin.in",
+    mobile: "+91 98100 00003",
     branchId: "north",
+    status: "Active",
     initials: "R",
   },
 ];

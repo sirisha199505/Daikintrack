@@ -63,15 +63,17 @@ export default function ProductManager({ branchId = null, title, subtitle }) {
       });
     if (q.trim()) {
       const t = q.toLowerCase();
-      l = l.filter(
-        (p) =>
+      l = l.filter((p) => {
+        const bn = branches.find((b) => b.id === p.branchId)?.name || "";
+        return (
           p.name.toLowerCase().includes(t) ||
-          p.barcode.includes(t) ||
+          bn.toLowerCase().includes(t) ||
           p.categoryName.toLowerCase().includes(t)
-      );
+        );
+      });
     }
     return l;
-  }, [products, branchId, cat, branch, status, q]);
+  }, [products, branches, branchId, cat, branch, status, q]);
 
   const branchName = (id) => branches.find((b) => b.id === id)?.name || "—";
 
@@ -116,7 +118,7 @@ export default function ProductManager({ branchId = null, title, subtitle }) {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search name, barcode or category…"
+              placeholder="Search name, branch or category…"
               className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-daikin-400 focus:bg-white"
             />
           </div>
@@ -189,7 +191,6 @@ export default function ProductManager({ branchId = null, title, subtitle }) {
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/60 text-[11px] font-bold uppercase tracking-wide text-slate-400">
                     <th className="px-5 py-3.5">Product</th>
-                    <th className="px-5 py-3.5">Barcode</th>
                     {!branchId && <th className="px-5 py-3.5">Branch</th>}
                     <th className="px-5 py-3.5">Category</th>
                     <th className="px-5 py-3.5 text-right">Stock</th>
@@ -219,9 +220,6 @@ export default function ProductManager({ branchId = null, title, subtitle }) {
                               </div>
                             </div>
                           </div>
-                        </td>
-                        <td className="px-5 py-3.5 font-mono text-xs text-slate-500">
-                          {p.barcode}
                         </td>
                         {!branchId && (
                           <td className="px-5 py-3.5 text-slate-600">
@@ -277,8 +275,8 @@ export default function ProductManager({ branchId = null, title, subtitle }) {
                       <div className="font-semibold text-slate-700">
                         {p.name}
                       </div>
-                      <div className="font-mono text-xs text-slate-400">
-                        {p.barcode}
+                      <div className="text-xs text-slate-400">
+                        {p.categoryName}
                       </div>
                     </div>
                     <Badge tone={s.tone}>{s.label}</Badge>

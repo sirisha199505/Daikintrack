@@ -1,38 +1,50 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  QrCode,
   ScanLine,
   Keyboard,
   Camera,
   CameraOff,
   Search,
+  QrCode,
 } from "lucide-react";
 import { Button } from "../ui/Primitives";
 import { useInventory } from "../../context/InventoryContext";
 
 const MODES = [
-  { id: "qr", label: "Scan QR Code", icon: QrCode },
-  { id: "barcode", label: "Scan Barcode", icon: ScanLine },
+  { id: "camera", label: "Scan Code", icon: ScanLine },
   { id: "manual", label: "Enter Manually", icon: Keyboard },
 ];
 
+// Decide whether a scanned value is a QR code or a barcode.
+// Uses the decoder's reported format when available, else a numeric heuristic
+// (EAN/UPC barcodes are 8–14 digits).
+function detectCodeType(code, formatName) {
+  if (formatName) {
+    return /qr/i.test(formatName) ? "qr" : "barcode";
+  }
+  const v = String(code).trim();
+  return /^\d{8,14}$/.test(v) ? "barcode" : "qr";
+}
+
 export default function Scanner({ onResult, branchId }) {
-  const [mode, setMode] = useState("qr");
+  const [mode, setMode] = useState("camera");
   const [manual, setManual] = useState("");
   const [camError, setCamError] = useState("");
   const [scanning, setScanning] = useState(false);
   const scannerRef = useRef(null);
+  const lockedRef = useRef(false);
   const regionId = "daikin-scan-region";
   const { products } = useInventory();
 
-  // Sample barcodes (scoped to branch when provided) for one-tap demo scanning.
+  // Sample codes (scoped to branch when provided) for one-tap demo scanning.
   const samples = products
     .filter((p) => (branchId ? p.branchId === branchId : true))
     .slice(0, 4);
 
   useEffect(() => {
     let cancelled = false;
+    lockedRef.current = false;
     async function start() {
       setCamError("");
       if (mode === "manual") return;
@@ -40,16 +52,16 @@ export default function Scanner({ onResult, branchId }) {
         const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import(
           "html5-qrcode"
         );
-        const formats =
-          mode === "qr"
-            ? [Html5QrcodeSupportedFormats.QR_CODE]
-            : [
-                Html5QrcodeSupportedFormats.EAN_13,
-                Html5QrcodeSupportedFormats.EAN_8,
-                Html5QrcodeSupportedFormats.CODE_128,
-                Html5QrcodeSupportedFormats.CODE_39,
-                Html5QrcodeSupportedFormats.UPC_A,
-              ];
+        // A single scanner that recognises QR codes AND common barcodes.
+        const formats = [
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+        ];
         const instance = new Html5Qrcode(regionId, {
           formatsToSupport: formats,
           verbose: false,
@@ -58,9 +70,10 @@ export default function Scanner({ onResult, branchId }) {
         await instance.start(
           { facingMode: "environment" },
           { fps: 10, qrbox: { width: 230, height: 230 } },
-          (decoded) => {
+          (decoded, result) => {
             if (cancelled) return;
-            handle(decoded);
+            const fmt = result?.result?.format?.formatName;
+            handle(decoded, fmt);
           },
           () => {}
         );
@@ -88,7 +101,10 @@ export default function Scanner({ onResult, branchId }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
-  function handle(code) {
+  function handle(code, formatName) {
+    // Guard against duplicate fires for the same scan.
+    if (lockedRef.current) return;
+    lockedRef.current = true;
     const inst = scannerRef.current;
     if (inst) {
       inst
@@ -98,20 +114,21 @@ export default function Scanner({ onResult, branchId }) {
       scannerRef.current = null;
     }
     setScanning(false);
-    onResult?.(String(code).trim());
+    const value = String(code).trim();
+    onResult?.(value, detectCodeType(value, formatName));
   }
 
   return (
     <div className="space-y-5">
       {/* Mode switch */}
-      <div className="grid grid-cols-3 gap-2 rounded-xl bg-slate-100 p-1">
+      <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
         {MODES.map((m) => {
           const active = mode === m.id;
           return (
             <button
               key={m.id}
               onClick={() => setMode(m.id)}
-              className={`relative flex flex-col items-center gap-1 rounded-lg py-2.5 text-xs font-semibold transition cursor-pointer ${
+              className={`relative flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition cursor-pointer ${
                 active ? "text-daikin-700" : "text-slate-500 hover:text-slate-700"
               }`}
             >
@@ -153,8 +170,10 @@ export default function Scanner({ onResult, branchId }) {
               </div>
             )}
           </div>
-          <p className="mt-3 text-center text-xs text-slate-500">
-            {camError || "Point the camera at a product QR / barcode label."}
+          <p className="mt-3 flex items-center justify-center gap-2 text-center text-xs text-slate-500">
+            <QrCode className="h-3.5 w-3.5" />
+            <ScanLine className="h-3.5 w-3.5" />
+            {camError || "Point the camera at a QR code or barcode — type is detected automatically."}
           </p>
         </div>
       ) : (
@@ -166,7 +185,7 @@ export default function Scanner({ onResult, branchId }) {
           className="space-y-3"
         >
           <label className="block text-sm font-semibold text-slate-600">
-            Enter barcode
+            Enter QR / barcode value
           </label>
           <div className="relative">
             <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
@@ -188,7 +207,7 @@ export default function Scanner({ onResult, branchId }) {
       {samples.length > 0 && (
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">
-            Demo barcodes
+            Demo codes
           </div>
           <div className="flex flex-wrap gap-2">
             {samples.map((p) => (

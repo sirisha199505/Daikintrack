@@ -5,7 +5,6 @@ import {
   Eye,
   Download,
   Printer,
-  PackageCheck,
   ReceiptText,
   Building2,
   ArrowDownLeft,
@@ -35,7 +34,6 @@ const RANGES = [
 const FIELDS = [
   { id: "all", label: "All Fields" },
   { id: "invoiceNo", label: "Invoice No." },
-  { id: "barcode", label: "Barcode" },
   { id: "productName", label: "Product" },
   { id: "branchName", label: "Branch" },
 ];
@@ -66,7 +64,7 @@ export default function History() {
       const t = q.toLowerCase();
       l = l.filter((row) => {
         if (field === "all")
-          return [row.invoiceNo, row.barcode, row.productName, row.branchName]
+          return [row.invoiceNo, row.productName, row.branchName]
             .join(" ")
             .toLowerCase()
             .includes(t);
@@ -77,12 +75,8 @@ export default function History() {
   }, [transactions, range, from, to, q, field]);
 
   const stats = useMemo(() => {
-    const distributed = transactions
-      .filter((t) => t.type === "out")
-      .reduce((s, t) => s + t.quantity, 0);
     const activeBranches = new Set(transactions.map((t) => t.branchId)).size;
     return {
-      distributed,
       total: transactions.length,
       branches: activeBranches,
     };
@@ -92,8 +86,8 @@ export default function History() {
     return (
       <div className="space-y-4">
         <Skeleton className="h-10 w-56" />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {Array.from({ length: 2 }).map((_, i) => (
             <Skeleton key={i} className="h-20" />
           ))}
         </div>
@@ -111,26 +105,19 @@ export default function History() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard
-          icon={PackageCheck}
-          label="Total Distributed"
-          value={num(stats.distributed)}
-          tone="blue"
-        />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <StatCard
           icon={ReceiptText}
           label="Total Transactions"
           value={num(stats.total)}
           tone="green"
-          delay={0.05}
         />
         <StatCard
           icon={Building2}
           label="Active Branches"
           value={stats.branches}
           tone="amber"
-          delay={0.1}
+          delay={0.05}
         />
       </div>
 
@@ -219,7 +206,6 @@ export default function History() {
                     <th className="px-5 py-3.5">Date</th>
                     <th className="px-5 py-3.5">Branch</th>
                     <th className="px-5 py-3.5">Product</th>
-                    <th className="px-5 py-3.5">Barcode</th>
                     <th className="px-5 py-3.5 text-center">Qty</th>
                     <th className="px-5 py-3.5">Status</th>
                     <th className="px-5 py-3.5 text-right">Actions</th>
@@ -242,9 +228,6 @@ export default function History() {
                       </td>
                       <td className="px-5 py-3.5 text-slate-700">
                         {t.productName}
-                      </td>
-                      <td className="px-5 py-3.5 font-mono text-xs text-slate-500">
-                        {t.barcode}
                       </td>
                       <td className="px-5 py-3.5 text-center font-semibold text-slate-700">
                         {t.quantity}

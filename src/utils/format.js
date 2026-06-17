@@ -45,3 +45,11 @@ export function timeAgo(d) {
 }
 
 export const classNames = (...c) => c.filter(Boolean).join(" ");
+
+export const ROLE_LABELS = {
+  admin: "Admin",
+  store_manager: "Store Manager",
+  distributor: "Distributor",
+};
+
+export const roleLabel = (role) => ROLE_LABELS[role] || "User";

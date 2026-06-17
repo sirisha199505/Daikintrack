@@ -1,143 +1,173 @@
-import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { AlertTriangle, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  Boxes,
+  PackageX,
+  CheckCircle2,
+  PieChart as PieIcon,
+} from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useInventory } from "../../context/InventoryContext";
 import { usePageLoad } from "../../hooks/usePageLoad";
 import GreetingHeader from "../../components/layout/GreetingHeader";
 import DonutChart from "../../components/charts/DonutChart";
-import ScanFlowModal from "../../components/scan/ScanFlowModal";
-import { Card, Skeleton } from "../../components/ui/Primitives";
+import { Card, StatCard, Skeleton, Button, EmptyState } from "../../components/ui/Primitives";
 import { num } from "../../utils/format";
 
 export default function ManagerDashboard() {
   const { user } = useAuth();
-  const { categoryBreakdown } = useInventory();
+  const { categoryBreakdown, statsFor, transactions } = useInventory();
+  const navigate = useNavigate();
   const loading = usePageLoad();
-  const [scanOpen, setScanOpen] = useState(false);
   const branchId = user.branchId;
 
-  const cats = useMemo(
-    () => categoryBreakdown(branchId).filter((c) => c.value > 0),
-    [categoryBreakdown, branchId]
+  const cats = useMemo(() => categoryBreakdown(branchId), [categoryBreakdown, branchId]);
+  const stats = useMemo(() => statsFor(branchId), [statsFor, branchId]);
+
+  const inStockData = useMemo(
+    () => cats.filter((c) => c.value > 0).map((c) => ({ name: c.name, value: c.value, color: c.color })),
+    [cats]
   );
-  const total = cats.reduce((s, c) => s + c.value, 0);
-  const lowCats = cats.filter((c) => c.low);
+  const lowData = useMemo(
+    () => cats.filter((c) => c.lowCount > 0).map((c) => ({ name: c.name, value: c.lowCount, color: c.color })),
+    [cats]
+  );
+  const movement = useMemo(() => {
+    const scope = transactions.filter((t) => !branchId || t.branchId === branchId);
+    const ins = scope.filter((t) => t.type === "in");
+    const outs = scope.filter((t) => t.type === "out");
+    return {
+      inCount: ins.length,
+      outCount: outs.length,
+      inUnits: ins.reduce((s, t) => s + t.quantity, 0),
+      outUnits: outs.reduce((s, t) => s + t.quantity, 0),
+    };
+  }, [transactions, branchId]);
 
   if (loading) return <ManagerSkeleton />;
 
+  const branchLabel = user.branch ? `${user.branch.name} · ${user.branch.location}` : "All Hubs";
+
   return (
-    <div className="space-y-5 pb-24">
+    <div className="space-y-6">
       <GreetingHeader
         name={user.name}
-        subtitle={`${user.branch?.name} · ${user.branch?.location}`}
+        subtitle={user.branch ? branchLabel : "All Hubs · Store Operations"}
         badge={
-          <div className="hidden shrink-0 rounded-xl bg-white/10 px-4 py-2.5 text-right ring-1 ring-white/15 sm:block">
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-white/60">
-              Code
+          user.branch ? (
+            <div className="hidden shrink-0 rounded-xl bg-white/10 px-4 py-2.5 text-right ring-1 ring-white/15 sm:block">
+              <div className="text-[10px] font-semibold uppercase tracking-widest text-white/60">
+                Code
+              </div>
+              <div className="text-lg font-bold">{user.branch.code}</div>
             </div>
-            <div className="text-lg font-bold">{user.branch?.code}</div>
-          </div>
+          ) : null
         }
       />
 
-      {/* Low stock alert */}
-      {lowCats.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, x: -10 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="flex items-center gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3"
-        >
-          <AlertTriangle className="h-5 w-5 shrink-0 text-red-500" />
-          <p className="text-sm text-red-700">
-            <span className="font-bold">Low Stock Alert</span> — {lowCats.length}{" "}
-            alert{lowCats.length > 1 ? "s" : ""} —{" "}
-            {lowCats.map((c) => c.name).join(", ")}
-          </p>
-        </motion.div>
-      )}
+      {/* ===== Stock Overview ===== */}
+      <section>
+        <div className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+          {branchLabel}
+        </div>
+        <h2 className="text-xl font-bold text-slate-800">Stock Overview</h2>
+      </section>
 
-      {/* Stock by category */}
-      <Card className="p-5 sm:p-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-slate-800">
-              Stock by Category
-            </h2>
-            <p className="text-xs text-slate-400">{num(total)} units total</p>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        {/* In Stock — Donut */}
+        <Card className="p-5">
+          <div className="flex items-start justify-between">
+            <div>
+              <h3 className="flex items-center gap-2 text-base font-bold text-slate-800">
+                <Boxes className="h-4 w-4 text-daikin-600" /> In Stock
+              </h3>
+              <p className="text-xs text-slate-400">Total available stock</p>
+            </div>
+            <span className="rounded-full bg-daikin-50 px-3 py-1 text-sm font-bold text-daikin-700">
+              {num(stats.totalStock)}
+            </span>
           </div>
-          <span className="rounded-full border border-daikin-200 bg-daikin-50 px-3 py-1 text-xs font-semibold text-daikin-700">
-            {user.branch?.name}
-          </span>
-        </div>
+          {inStockData.length ? (
+            <div className="mt-2">
+              <DonutChart
+                data={inStockData}
+                centerValue={num(stats.totalStock)}
+                centerLabel="in stock"
+              />
+            </div>
+          ) : (
+            <EmptyState icon={PackageX} title="No stock available" />
+          )}
+        </Card>
 
-        <div className="mt-4">
-          <DonutChart data={cats} height={260} />
-        </div>
-
-        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {cats.map((c, i) => (
-            <motion.div
-              key={c.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04 }}
-              className="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-3.5 hover:border-daikin-200 hover:bg-daikin-50/40 transition"
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ background: c.color }}
-                />
-                <span className="truncate text-sm font-semibold text-slate-700">
-                  {c.name}
-                </span>
-              </div>
-              <span
-                className={`text-lg font-bold ${
-                  c.low ? "text-red-500" : "text-slate-800"
-                }`}
-              >
-                {c.value}
-              </span>
-            </motion.div>
-          ))}
-        </div>
-      </Card>
-
-      {/* Sticky check in/out bar */}
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/90 p-3 backdrop-blur lg:left-64">
-        <div className="mx-auto flex max-w-7xl gap-3">
-          <button
-            onClick={() => setScanOpen(true)}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-daikin-btn py-3.5 text-sm font-bold text-white shadow-[var(--shadow-soft)] hover:brightness-110 cursor-pointer"
-          >
-            <ArrowDownLeft className="h-4 w-4" /> Check In
-          </button>
-          <button
-            onClick={() => setScanOpen(true)}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 py-3.5 text-sm font-bold text-white shadow-sm hover:bg-red-700 cursor-pointer"
-          >
-            <ArrowUpRight className="h-4 w-4" /> Check Out
-          </button>
-        </div>
+        {/* Low Stock — Pie */}
+        <Card className="p-5">
+          <div className="flex items-start justify-between">
+            <div>
+              <h3 className="flex items-center gap-2 text-base font-bold text-slate-800">
+                <PieIcon className="h-4 w-4 text-red-500" /> Low Stock
+              </h3>
+              <p className="text-xs text-slate-400">Items at or below threshold</p>
+            </div>
+            <span className="rounded-full bg-red-50 px-3 py-1 text-sm font-bold text-red-600">
+              {num(stats.lowStock)}
+            </span>
+          </div>
+          {lowData.length ? (
+            <div className="mt-2">
+              <DonutChart data={lowData} innerRadius={0} unit="items" />
+            </div>
+          ) : (
+            <div className="grid min-h-[220px] place-items-center">
+              <EmptyState
+                icon={CheckCircle2}
+                title="All healthy"
+                subtitle="No products are running low right now."
+              />
+            </div>
+          )}
+        </Card>
       </div>
 
-      <ScanFlowModal
-        open={scanOpen}
-        onClose={() => setScanOpen(false)}
-        branchId={branchId}
-      />
+      {/* ===== Check-In / Check-Out Summary ===== */}
+      <section>
+        <h2 className="text-xl font-bold text-slate-800">Check-In / Check-Out Summary</h2>
+      </section>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard icon={ArrowDownLeft} label="Check-Ins" value={num(movement.inCount)} tone="green" />
+        <StatCard icon={Boxes} label="Units Received" value={num(movement.inUnits)} tone="blue" delay={0.05} />
+        <StatCard icon={ArrowUpRight} label="Check-Outs" value={num(movement.outCount)} tone="red" delay={0.1} />
+        <StatCard icon={PackageX} label="Units Dispatched" value={num(movement.outUnits)} tone="amber" delay={0.15} />
+      </div>
+
+      <Card className="flex flex-col gap-3 p-5 sm:flex-row">
+        <Button size="lg" className="flex-1" onClick={() => navigate("/app/scan?op=in")}>
+          <ArrowDownLeft className="h-4 w-4" /> Check In
+        </Button>
+        <Button size="lg" variant="danger" className="flex-1" onClick={() => navigate("/app/scan?op=out")}>
+          <ArrowUpRight className="h-4 w-4" /> Check Out
+        </Button>
+      </Card>
     </div>
   );
 }
 
 function ManagerSkeleton() {
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <Skeleton className="h-28 w-full" />
-      <Skeleton className="h-12 w-full" />
-      <Skeleton className="h-72 w-full" />
+      <Skeleton className="h-7 w-48" />
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <Skeleton className="h-72 w-full" />
+        <Skeleton className="h-72 w-full" />
+      </div>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <Skeleton className="h-72 w-full" />
+        <Skeleton className="h-72 w-full" />
+      </div>
     </div>
   );
 }

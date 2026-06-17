@@ -7,7 +7,11 @@ export default function ManageStock() {
     <ProductManager
       branchId={user.branchId}
       title="Manage Stock"
-      subtitle={`Products at ${user.branch?.name} · ${user.branch?.location}`}
+      subtitle={
+        user.branch
+          ? `Inventory at ${user.branch.name} · ${user.branch.location}`
+          : "Stock levels across all hubs"
+      }
     />
   );
 }

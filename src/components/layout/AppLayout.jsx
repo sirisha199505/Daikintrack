@@ -3,6 +3,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { LogOut, Menu, X, ChevronDown } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { roleLabel } from "../../utils/format";
 import Sidebar from "./Sidebar";
 import logo from "/DAIKIN_logo.PNG";
 
@@ -12,7 +13,7 @@ export default function AppLayout() {
   const [drawer, setDrawer] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
-  const roleLabel = user.role === "admin" ? "Store Manager" : "Distributor";
+  const userRole = roleLabel(user.role);
 
   function handleLogout() {
     logout();
@@ -56,7 +57,7 @@ export default function AppLayout() {
             <div className="hidden leading-tight text-left sm:block">
               <div className="text-sm font-bold text-white">{user.name}</div>
               <div className="text-[10px] font-semibold uppercase tracking-wider text-white/60">
-                {roleLabel}
+                {userRole}
               </div>
             </div>
             <ChevronDown
@@ -89,7 +90,7 @@ export default function AppLayout() {
                         {user.name}
                       </div>
                       <div className="text-xs font-semibold text-daikin-600">
-                        {roleLabel}
+                        {userRole}
                       </div>
                     </div>
                   </div>

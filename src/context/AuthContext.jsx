@@ -1,11 +1,12 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useState } from "react";
-import { USERS, BRANCHES } from "../data/seed";
+import { useAdmin } from "./AdminContext";
 
 const AuthContext = createContext(null);
-const STORAGE_KEY = "daikin.auth.user";
+const STORAGE_KEY = "daikin.auth.user.v2";
 
 export function AuthProvider({ children }) {
+  const { users, branches } = useAdmin();
   const [user, setUser] = useState(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -20,20 +21,24 @@ export function AuthProvider({ children }) {
     else localStorage.removeItem(STORAGE_KEY);
   }, [user]);
 
-  // role: 'admin' | 'manager'. Demo auth — matches against seed users.
-  function login({ role, username, password }) {
-    const candidate = USERS.find(
-      (u) => u.role === role && (u.username === username || username === "")
-    );
-    // Lenient demo auth: any non-empty password works for the matched role.
-    if (!candidate) {
-      return { ok: false, error: "No account found for this role." };
+  // Credential-based auth — matches username + password against seed users.
+  // The matched user's role decides which pages they land on after login.
+  function login({ username, password }) {
+    if (!username) {
+      return { ok: false, error: "Please enter your username." };
     }
     if (!password) {
       return { ok: false, error: "Please enter your password." };
     }
+    const candidate = users.find((u) => u.username === username);
+    if (!candidate || candidate.password !== password) {
+      return { ok: false, error: "Invalid username or password." };
+    }
+    if (candidate.status === "Inactive") {
+      return { ok: false, error: "This account is disabled. Contact an admin." };
+    }
     const branch = candidate.branchId
-      ? BRANCHES.find((b) => b.id === candidate.branchId)
+      ? branches.find((b) => b.id === candidate.branchId)
       : null;
     setUser({ ...candidate, branch });
     return { ok: true, user: candidate };

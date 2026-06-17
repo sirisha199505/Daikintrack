@@ -6,10 +6,7 @@ import {
   Lock,
   Eye,
   EyeOff,
-  ShieldCheck,
-  UserCog,
   Boxes,
-  Layers,
   Activity,
   Loader2,
 } from "lucide-react";
@@ -17,37 +14,24 @@ import { useAuth } from "../context/AuthContext";
 import logo from "/DAIKIN_logo.PNG";
 import warehouse from "/warehouse-bg.png";
 
-const ROLES = [
-  { id: "admin", label: "Store Manager", icon: ShieldCheck, user: "admin" },
-  { id: "manager", label: "Distributor", icon: UserCog, user: "rahul" },
-];
-
 const STATS = [
   { icon: Boxes, value: "4", label: "Warehouses" },
-  { icon: Layers, value: "8", label: "Categories" },
   { icon: Activity, value: "Real-time", label: "Tracking" },
 ];
 
 export default function Login() {
   const { login, user } = useAuth();
   const navigate = useNavigate();
-  const [role, setRole] = useState("admin");
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("daikin123");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (user) navigate("/app/dashboard", { replace: true });
+    if (user) navigate("/app", { replace: true });
   }, [user, navigate]);
-
-  function pickRole(r) {
-    setRole(r.id);
-    setUsername(r.user);
-    setError("");
-  }
 
   function submit(e) {
     e.preventDefault();
@@ -55,12 +39,13 @@ export default function Login() {
     setBusy(true);
     // Simulate an auth round-trip for a polished loading state.
     setTimeout(() => {
-      const res = login({ role, username, password });
+      const res = login({ username, password });
       if (!res.ok) {
         setError(res.error);
         setBusy(false);
       } else {
-        navigate("/app/dashboard", { replace: true });
+        // Land on the dashboard; routing picks the right pages for the role.
+        navigate("/app", { replace: true });
       }
     }, 750);
   }
@@ -119,34 +104,11 @@ export default function Login() {
           <h2 className="text-3xl font-extrabold text-slate-800">
             Welcome back
           </h2>
+          <p className="mt-2 text-sm text-slate-500">
+            Sign in with your credentials to continue.
+          </p>
 
-          {/* Role toggle */}
-          <div className="mt-6 grid grid-cols-2 gap-1 rounded-2xl bg-slate-100 p-1">
-            {ROLES.map((r) => {
-              const active = role === r.id;
-              return (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => pickRole(r)}
-                  className={`relative flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition cursor-pointer ${
-                    active ? "text-daikin-700" : "text-slate-500"
-                  }`}
-                >
-                  {active && (
-                    <motion.div
-                      layoutId="role-pill"
-                      className="absolute inset-0 rounded-xl bg-white shadow-sm"
-                    />
-                  )}
-                  <r.icon className="relative h-4 w-4" />
-                  <span className="relative">{r.label}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          <form onSubmit={submit} className="mt-5 space-y-4">
+          <form onSubmit={submit} className="mt-6 space-y-4">
             <div className="relative">
               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
               <input
