@@ -1,8 +1,38 @@
 import { jsPDF } from "jspdf";
 import { inr, fmtDateTime } from "./format";
+import logoUrl from "/DAIKIN_logo.PNG";
+
+// Load the real Daikin logo once and cache it as a PNG data URL so the printed
+// document uses the exact same logo (and colours) as the app.
+let logoPromise;
+function getLogo() {
+  if (!logoPromise) {
+    logoPromise = new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          canvas.getContext("2d").drawImage(img, 0, 0);
+          resolve({
+            data: canvas.toDataURL("image/png"),
+            w: img.naturalWidth,
+            h: img.naturalHeight,
+          });
+        } catch {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = logoUrl;
+    });
+  }
+  return logoPromise;
+}
 
 // Build a branded Daikin invoice PDF for a transaction.
-export function buildInvoiceDoc(txn, product) {
+export async function buildInvoiceDoc(txn, product) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
   const unit = product?.price || 0;
@@ -11,13 +41,25 @@ export function buildInvoiceDoc(txn, product) {
   // Header band
   doc.setFillColor(0, 31, 84);
   doc.rect(0, 0, W, 90, "F");
+
+  // Daikin logo (same asset as the app); fall back to text if it can't load.
+  const logo = await getLogo();
+  let opsX = 145;
+  if (logo) {
+    const h = 34;
+    const w = h * (logo.w / logo.h);
+    doc.addImage(logo.data, "PNG", 40, 28, w, h);
+    opsX = 40 + w + 12;
+  } else {
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(24);
+    doc.text("DAIKIN", 40, 50);
+  }
   doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(24);
-  doc.text("DAIKIN", 40, 50);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.text("INVENTORY OPS", 145, 50);
+  doc.text("INVENTORY OPS", opsX, 52);
   doc.setFontSize(11);
   doc.text("TAX INVOICE", W - 40, 45, { align: "right" });
 
@@ -90,13 +132,13 @@ export function buildInvoiceDoc(txn, product) {
   return doc;
 }
 
-export function downloadInvoice(txn, product) {
-  const doc = buildInvoiceDoc(txn, product);
+export async function downloadInvoice(txn, product) {
+  const doc = await buildInvoiceDoc(txn, product);
   doc.save(`${txn.invoiceNo}.pdf`);
 }
 
-export function printInvoice(txn, product) {
-  const doc = buildInvoiceDoc(txn, product);
+export async function printInvoice(txn, product) {
+  const doc = await buildInvoiceDoc(txn, product);
   doc.autoPrint();
   const url = doc.output("bloburl");
   const w = window.open(url, "_blank");

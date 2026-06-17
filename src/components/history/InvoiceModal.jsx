@@ -23,7 +23,7 @@ export default function InvoiceModal({ txn, open, onClose }) {
               <img
                 src={logo}
                 alt="Daikin"
-                className="h-7 w-auto brightness-0 invert"
+                className="h-7 w-auto"
               />
               <span className="text-xs font-semibold uppercase tracking-widest text-white/70">
                 Inventory Ops

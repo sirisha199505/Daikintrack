@@ -70,7 +70,7 @@ export default function Login() {
             <motion.img
               src={logo}
               alt="Daikin"
-              className="h-28 w-auto brightness-110 saturate-150"
+              className="h-28 w-auto"
               initial={{ clipPath: "inset(0 100% 0 0)" }}
               animate={{ clipPath: "inset(0 0% 0 0)" }}
               transition={{ duration: 1.6, ease: "easeInOut" }}

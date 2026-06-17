@@ -35,7 +35,7 @@ export default function AppLayout() {
             <motion.img
               src={logo}
               alt="Daikin"
-              className="h-14 w-auto brightness-110 saturate-150"
+              className="h-14 w-auto"
               initial={{ clipPath: "inset(0 100% 0 0)" }}
               animate={{ clipPath: "inset(0 0% 0 0)" }}
               transition={{ duration: 1.4, ease: "easeInOut" }}
@@ -139,7 +139,7 @@ export default function AppLayout() {
                   <motion.img
                     src={logo}
                     alt="Daikin"
-                    className="h-14 w-auto brightness-110 saturate-150"
+                    className="h-14 w-auto"
                     initial={{ clipPath: "inset(0 100% 0 0)" }}
                     animate={{ clipPath: "inset(0 0% 0 0)" }}
                     transition={{ duration: 1.4, ease: "easeInOut" }}
