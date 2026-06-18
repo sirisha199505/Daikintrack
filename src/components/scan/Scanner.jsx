@@ -27,6 +27,24 @@ function detectCodeType(code, formatName) {
   return /^\d{8,14}$/.test(v) ? "barcode" : "qr";
 }
 
+// Safely stop & clear a scanner. html5-qrcode's stop() throws *synchronously*
+// when the scanner isn't actively SCANNING (2) or PAUSED (3) — e.g. when it was
+// never started (manual mode) or is still booting — so we guard on state and
+// wrap everything in try/catch.
+function stopScanner(inst) {
+  if (!inst) return;
+  try {
+    const state = typeof inst.getState === "function" ? inst.getState() : 2;
+    if (state === 2 || state === 3) {
+      inst.stop().then(() => inst.clear()).catch(() => {});
+    } else {
+      inst.clear();
+    }
+  } catch {
+    /* already stopped / not running — nothing to do */
+  }
+}
+
 export default function Scanner({ onResult, branchId }) {
   const [mode, setMode] = useState("camera");
   const [manual, setManual] = useState("");
@@ -88,14 +106,8 @@ export default function Scanner({ onResult, branchId }) {
     start();
     return () => {
       cancelled = true;
-      const inst = scannerRef.current;
-      if (inst) {
-        inst
-          .stop()
-          .then(() => inst.clear())
-          .catch(() => {});
-        scannerRef.current = null;
-      }
+      stopScanner(scannerRef.current);
+      scannerRef.current = null;
       setScanning(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -105,14 +117,8 @@ export default function Scanner({ onResult, branchId }) {
     // Guard against duplicate fires for the same scan.
     if (lockedRef.current) return;
     lockedRef.current = true;
-    const inst = scannerRef.current;
-    if (inst) {
-      inst
-        .stop()
-        .then(() => inst.clear())
-        .catch(() => {});
-      scannerRef.current = null;
-    }
+    stopScanner(scannerRef.current);
+    scannerRef.current = null;
     setScanning(false);
     const value = String(code).trim();
     onResult?.(value, detectCodeType(value, formatName));
