@@ -13,12 +13,12 @@ import { useInventory } from "../../context/InventoryContext";
 import { usePageLoad } from "../../hooks/usePageLoad";
 import GreetingHeader from "../../components/layout/GreetingHeader";
 import DonutChart from "../../components/charts/DonutChart";
-import { Card, StatCard, Skeleton, Button, EmptyState } from "../../components/ui/Primitives";
+import { Card, Skeleton, Button, EmptyState } from "../../components/ui/Primitives";
 import { num } from "../../utils/format";
 
 export default function ManagerDashboard() {
   const { user } = useAuth();
-  const { categoryBreakdown, statsFor, transactions } = useInventory();
+  const { categoryBreakdown, statsFor } = useInventory();
   const navigate = useNavigate();
   const loading = usePageLoad();
   const branchId = user.branchId;
@@ -34,18 +34,6 @@ export default function ManagerDashboard() {
     () => cats.filter((c) => c.lowCount > 0).map((c) => ({ name: c.name, value: c.lowCount, color: c.color })),
     [cats]
   );
-  const movement = useMemo(() => {
-    const scope = transactions.filter((t) => !branchId || t.branchId === branchId);
-    const ins = scope.filter((t) => t.type === "in");
-    const outs = scope.filter((t) => t.type === "out");
-    return {
-      inCount: ins.length,
-      outCount: outs.length,
-      inUnits: ins.reduce((s, t) => s + t.quantity, 0),
-      outUnits: outs.reduce((s, t) => s + t.quantity, 0),
-    };
-  }, [transactions, branchId]);
-
   if (loading) return <ManagerSkeleton />;
 
   const branchLabel = user.branch ? `${user.branch.name} · ${user.branch.location}` : "All Hubs";
@@ -129,18 +117,6 @@ export default function ManagerDashboard() {
             </div>
           )}
         </Card>
-      </div>
-
-      {/* ===== Check-In / Check-Out Summary ===== */}
-      <section>
-        <h2 className="text-xl font-bold text-slate-800">Check-In / Check-Out Summary</h2>
-      </section>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard icon={ArrowDownLeft} label="Check-Ins" value={num(movement.inCount)} tone="green" />
-        <StatCard icon={Boxes} label="Units Received" value={num(movement.inUnits)} tone="blue" delay={0.05} />
-        <StatCard icon={ArrowUpRight} label="Check-Outs" value={num(movement.outCount)} tone="red" delay={0.1} />
-        <StatCard icon={PackageX} label="Units Dispatched" value={num(movement.outUnits)} tone="amber" delay={0.15} />
       </div>
 
       <Card className="flex flex-col gap-3 p-5 sm:flex-row">

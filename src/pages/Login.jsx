@@ -99,7 +99,7 @@ export default function Login() {
         {/* Right form */}
         <div className="flex flex-col justify-center p-8 sm:p-12">
           <h2 className="text-3xl font-extrabold text-slate-800">
-            Welcome back
+            Login
           </h2>
           <p className="mt-2 text-sm text-slate-500">
             Sign in with your credentials to continue.
