@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "../../context/AuthContext";
 import { NAV } from "./navConfig";
-import { classNames, roleLabel } from "../../utils/format";
+import { classNames } from "../../utils/format";
 
 export default function Sidebar({ onNavigate }) {
   const { user } = useAuth();
@@ -47,23 +47,6 @@ export default function Sidebar({ onNavigate }) {
           ))}
         </ul>
       </nav>
-
-      {/* User footer */}
-      <div className="border-t border-slate-100 p-4">
-        <div className="flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-full bg-daikin-btn text-sm font-bold text-white">
-            {user.initials}
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-sm font-bold text-slate-800">
-              {user.name}
-            </div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-daikin-600">
-              {roleLabel(user.role)}
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
