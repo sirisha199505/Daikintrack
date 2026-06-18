@@ -11,15 +11,15 @@ import { ToastProvider } from "./components/ui/Toast";
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <BrowserRouter>
-      <AdminProvider>
-        <AuthProvider>
+      <AuthProvider>
+        <AdminProvider>
           <InventoryProvider>
             <ToastProvider>
               <App />
             </ToastProvider>
           </InventoryProvider>
-        </AuthProvider>
-      </AdminProvider>
+        </AdminProvider>
+      </AuthProvider>
     </BrowserRouter>
   </StrictMode>
 );

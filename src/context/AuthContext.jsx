@@ -1,55 +1,88 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useEffect, useState } from "react";
-import { useAdmin } from "./AdminContext";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { BRANCHES } from "../data/seed";
+import {
+  Api,
+  ensureBranchMap,
+  getToken,
+  mapUserFromApi,
+  setToken,
+} from "../lib/api";
 
 const AuthContext = createContext(null);
-const STORAGE_KEY = "daikin.auth.user.v2";
+const USER_KEY = "daikin.auth.user.v3";
+
+// Attach the full branch object (name/location/code/gradient) the UI expects,
+// resolved from the slug we mapped onto the user.
+function attachBranch(u) {
+  if (!u) return u;
+  const branch = u.branchId ? BRANCHES.find((b) => b.id === u.branchId) || null : null;
+  return { ...u, branch };
+}
 
 export function AuthProvider({ children }) {
-  const { users, branches } = useAdmin();
   const [user, setUser] = useState(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(USER_KEY);
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
     }
   });
 
+  // Persist the mapped user so a reload renders instantly before we re-verify.
   useEffect(() => {
-    if (user) localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
-    else localStorage.removeItem(STORAGE_KEY);
+    try {
+      if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
+      else localStorage.removeItem(USER_KEY);
+    } catch {
+      /* storage unavailable */
+    }
   }, [user]);
 
-  // Credential-based auth — matches username + password against seed users.
-  // The matched user's role decides which pages they land on after login.
-  function login({ username, password }) {
-    if (!username) {
-      return { ok: false, error: "Please enter your username." };
+  // On mount, if a token exists, verify it and refresh the user from the server.
+  useEffect(() => {
+    let cancelled = false;
+    async function restore() {
+      if (!getToken()) return;
+      try {
+        await ensureBranchMap();
+        const info = await Api.me();
+        if (!cancelled) setUser(attachBranch(mapUserFromApi(info)));
+      } catch {
+        if (!cancelled) {
+          setToken(null);
+          setUser(null);
+        }
+      }
     }
-    if (!password) {
-      return { ok: false, error: "Please enter your password." };
-    }
-    const normalized = username.trim().toLowerCase();
-    const candidate = users.find(
-      (u) => u.username?.trim().toLowerCase() === normalized
-    );
-    if (!candidate || candidate.password !== password) {
-      return { ok: false, error: "Invalid username or password." };
-    }
-    if (candidate.status === "Inactive") {
-      return { ok: false, error: "This account is disabled. Contact an admin." };
-    }
-    const branch = candidate.branchId
-      ? branches.find((b) => b.id === candidate.branchId)
-      : null;
-    setUser({ ...candidate, branch });
-    return { ok: true, user: candidate };
-  }
+    restore();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  function logout() {
+  // Real credential auth against POST /api/login. Returns { ok, error } so the
+  // login page can keep its existing flow.
+  const login = useCallback(async ({ username, password }) => {
+    if (!username) return { ok: false, error: "Please enter your username." };
+    if (!password) return { ok: false, error: "Please enter your password." };
+    try {
+      const { token, info } = await Api.login(username.trim(), password);
+      setToken(token);
+      await ensureBranchMap(true);
+      const mapped = attachBranch(mapUserFromApi(info));
+      setUser(mapped);
+      return { ok: true, user: mapped };
+    } catch (e) {
+      return { ok: false, error: e.message || "Invalid username or password." };
+    }
+  }, []);
+
+  const logout = useCallback(() => {
+    setToken(null);
     setUser(null);
-  }
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, login, logout }}>

@@ -33,6 +33,7 @@ export default function UserFormModal({ open, onClose, initial, lockBranch, onSa
   const isEdit = Boolean(initial?.id);
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -51,7 +52,7 @@ export default function UserFormModal({ open, onClose, initial, lockBranch, onSa
     setForm((f) => ({ ...f, [k]: v }));
   }
 
-  function submit(e) {
+  async function submit(e) {
     e.preventDefault();
     const errs = {};
     if (!form.name.trim()) errs.name = "Required";
@@ -75,10 +76,18 @@ export default function UserFormModal({ open, onClose, initial, lockBranch, onSa
       // Admins are not tied to a branch.
       branchId: form.role === "admin" ? null : form.branchId || null,
     };
-    if (isEdit) updateUser(initial.id, payload);
-    else addUser(payload);
-    onSaved?.(isEdit);
-    onClose();
+
+    setSaving(true);
+    try {
+      if (isEdit) await updateUser(initial.id, payload);
+      else await addUser(payload);
+      onSaved?.(isEdit);
+      onClose();
+    } catch (err) {
+      setErrors({ form: err?.message || "Failed to save user. Please try again." });
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -184,11 +193,19 @@ export default function UserFormModal({ open, onClose, initial, lockBranch, onSa
           </Field>
         </div>
 
+        {errors.form && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-600">
+            {errors.form}
+          </div>
+        )}
+
         <div className="flex justify-end gap-3 pt-2">
-          <Button type="button" variant="subtle" onClick={onClose}>
+          <Button type="button" variant="subtle" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button type="submit">{isEdit ? "Save Changes" : "Create User"}</Button>
+          <Button type="submit" disabled={saving}>
+            {saving ? "Saving…" : isEdit ? "Save Changes" : "Create User"}
+          </Button>
         </div>
       </form>
     </Modal>

@@ -33,21 +33,18 @@ export default function Login() {
     if (user) navigate("/app", { replace: true });
   }, [user, navigate]);
 
-  function submit(e) {
+  async function submit(e) {
     e.preventDefault();
     setError("");
     setBusy(true);
-    // Simulate an auth round-trip for a polished loading state.
-    setTimeout(() => {
-      const res = login({ username, password });
-      if (!res.ok) {
-        setError(res.error);
-        setBusy(false);
-      } else {
-        // Land on the dashboard; routing picks the right pages for the role.
-        navigate("/app", { replace: true });
-      }
-    }, 750);
+    const res = await login({ username, password });
+    if (!res.ok) {
+      setError(res.error);
+      setBusy(false);
+    } else {
+      // Land on the dashboard; routing picks the right pages for the role.
+      navigate("/app", { replace: true });
+    }
   }
 
   return (

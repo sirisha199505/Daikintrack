@@ -57,16 +57,25 @@ export default function UserManagement() {
     return l;
   }, [users, role, status, q]);
 
-  function confirmDelete() {
-    deleteUser(toDelete.id);
-    toast(`Deleted ${toDelete.name}`, "info");
+  async function confirmDelete() {
+    const target = toDelete;
     setToDelete(null);
+    try {
+      await deleteUser(target.id);
+      toast(`Deleted ${target.name}`, "info");
+    } catch (e) {
+      toast(e?.message || "Failed to delete user", "error");
+    }
   }
 
-  function toggleStatus(u) {
+  async function toggleStatus(u) {
     const next = (u.status || "Active") === "Active" ? "Inactive" : "Active";
-    setUserStatus(u.id, next);
-    toast(`${u.name} ${next === "Active" ? "enabled" : "disabled"}`, "success");
+    try {
+      await setUserStatus(u.id, next);
+      toast(`${u.name} ${next === "Active" ? "enabled" : "disabled"}`, "success");
+    } catch (e) {
+      toast(e?.message || "Failed to update status", "error");
+    }
   }
 
   if (loading) {

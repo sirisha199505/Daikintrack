@@ -1,7 +1,9 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useMemo } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { usePersistentState } from "../hooks/usePersistentState";
-import { USERS, BRANCHES, CATEGORIES } from "../data/seed";
+import { BRANCHES, CATEGORIES } from "../data/seed";
+import { useAuth } from "./AuthContext";
+import { Api, ensureBranchMap, mapUserFromApi, mapUserToApi } from "../lib/api";
 
 const AdminContext = createContext(null);
 
@@ -16,18 +18,6 @@ const CATEGORY_PALETTE = [
   "#22b8e6", "#16a34a", "#f59e0b", "#ef4444",
   "#8b5cf6", "#14b8a6", "#6366f1", "#f97316",
 ];
-
-function initials(name = "") {
-  return (
-    name
-      .trim()
-      .split(/\s+/)
-      .map((w) => w[0])
-      .slice(0, 2)
-      .join("")
-      .toUpperCase() || "?"
-  );
-}
 
 function slugify(name = "") {
   return name
@@ -44,82 +34,70 @@ export const ROLE_OPTIONS = [
 ];
 
 export function AdminProvider({ children }) {
-  const [users, setUsers] = usePersistentState("daikin.admin.users", USERS);
-  const [branches, setBranches] = usePersistentState(
-    "daikin.admin.branches",
-    BRANCHES
-  );
-  const [categories, setCategories] = usePersistentState(
-    "daikin.admin.categories",
-    CATEGORIES
-  );
+  const { user } = useAuth();
 
-  // ---- Users ----
-  const addUser = useCallback((data) => {
-    setUsers((prev) => [
-      {
-        id: `u-${Date.now()}`,
-        status: "Active",
-        branchId: null,
-        ...data,
-        title:
-          ROLE_OPTIONS.find((r) => r.id === data.role)?.label || "User",
-        initials: initials(data.name),
-      },
-      ...prev,
-    ]);
-  }, [setUsers]);
+  // ---- Users: backed by the API (synced across all devices) ----
+  const [users, setUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
 
-  const updateUser = useCallback((id, data) => {
-    setUsers((prev) =>
-      prev.map((u) =>
-        u.id === id
-          ? {
-              ...u,
-              ...data,
-              title:
-                ROLE_OPTIONS.find((r) => r.id === (data.role || u.role))
-                  ?.label || u.title,
-              initials: initials(data.name ?? u.name),
-            }
-          : u
-      )
-    );
-  }, [setUsers]);
+  // ---- Branches & categories: still local (seed) for now ----
+  const [branches, setBranches] = usePersistentState("daikin.admin.branches", BRANCHES);
+  const [categories, setCategories] = usePersistentState("daikin.admin.categories", CATEGORIES);
 
-  const deleteUser = useCallback(
-    (id) => setUsers((prev) => prev.filter((u) => u.id !== id)),
-    [setUsers]
-  );
+  const refreshUsers = useCallback(async () => {
+    if (!user || user.role !== "admin") {
+      setUsers([]);
+      return;
+    }
+    setUsersLoading(true);
+    try {
+      await ensureBranchMap();
+      const list = await Api.listUsers();
+      setUsers(list.map(mapUserFromApi));
+    } catch (e) {
+      console.error("Failed to load users:", e);
+    } finally {
+      setUsersLoading(false);
+    }
+  }, [user]);
 
-  const setUserStatus = useCallback(
-    (id, status) =>
-      setUsers((prev) =>
-        prev.map((u) => (u.id === id ? { ...u, status } : u))
-      ),
-    [setUsers]
-  );
+  useEffect(() => {
+    refreshUsers();
+  }, [refreshUsers]);
 
-  // ---- Branches ----
+  const addUser = useCallback(async (data) => {
+    const created = await Api.createUser(mapUserToApi(data));
+    setUsers((prev) => [mapUserFromApi(created), ...prev]);
+  }, []);
+
+  const updateUser = useCallback(async (id, data) => {
+    const updated = await Api.updateUser(id, mapUserToApi(data));
+    setUsers((prev) => prev.map((u) => (u.id === id ? mapUserFromApi(updated) : u)));
+  }, []);
+
+  const deleteUser = useCallback(async (id) => {
+    await Api.deleteUser(id);
+    setUsers((prev) => prev.filter((u) => u.id !== id));
+  }, []);
+
+  const setUserStatus = useCallback(async (id, status) => {
+    const updated = await Api.updateUser(id, { status, active: status !== "Inactive" });
+    setUsers((prev) => prev.map((u) => (u.id === id ? mapUserFromApi(updated) : u)));
+  }, []);
+
+  // ---- Branches (local only — backend wiring is a later step) ----
   const addBranch = useCallback((data) => {
     setBranches((prev) => {
       const palette = BRANCH_PALETTE[prev.length % BRANCH_PALETTE.length];
       return [
         ...prev,
-        {
-          id: slugify(data.name) || `b-${Date.now()}`,
-          status: "Active",
-          ...palette,
-          ...data,
-        },
+        { id: slugify(data.name) || `b-${Date.now()}`, status: "Active", ...palette, ...data },
       ];
     });
   }, [setBranches]);
 
   const updateBranch = useCallback((id, data) => {
-    setBranches((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, ...data } : b))
-    );
+    setBranches((prev) => prev.map((b) => (b.id === id ? { ...b, ...data } : b)));
   }, [setBranches]);
 
   const deleteBranch = useCallback(
@@ -127,22 +105,16 @@ export function AdminProvider({ children }) {
     [setBranches]
   );
 
-  // ---- Categories ----
+  // ---- Categories (local only — backend wiring is a later step) ----
   const addCategory = useCallback((data) => {
     setCategories((prev) => [
       ...prev,
-      {
-        id: slugify(data.name) || `c-${Date.now()}`,
-        color: CATEGORY_PALETTE[prev.length % CATEGORY_PALETTE.length],
-        ...data,
-      },
+      { id: slugify(data.name) || `c-${Date.now()}`, color: CATEGORY_PALETTE[prev.length % CATEGORY_PALETTE.length], ...data },
     ]);
   }, [setCategories]);
 
   const updateCategory = useCallback((id, data) => {
-    setCategories((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, ...data } : c))
-    );
+    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, ...data } : c)));
   }, [setCategories]);
 
   const deleteCategory = useCallback(
@@ -153,6 +125,8 @@ export function AdminProvider({ children }) {
   const value = useMemo(
     () => ({
       users,
+      usersLoading,
+      refreshUsers,
       branches,
       categories,
       addUser,
@@ -168,6 +142,8 @@ export function AdminProvider({ children }) {
     }),
     [
       users,
+      usersLoading,
+      refreshUsers,
       branches,
       categories,
       addUser,
@@ -183,9 +159,7 @@ export function AdminProvider({ children }) {
     ]
   );
 
-  return (
-    <AdminContext.Provider value={value}>{children}</AdminContext.Provider>
-  );
+  return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>;
 }
 
 export function useAdmin() {
