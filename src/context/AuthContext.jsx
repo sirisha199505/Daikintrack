@@ -30,7 +30,10 @@ export function AuthProvider({ children }) {
     if (!password) {
       return { ok: false, error: "Please enter your password." };
     }
-    const candidate = users.find((u) => u.username === username);
+    const normalized = username.trim().toLowerCase();
+    const candidate = users.find(
+      (u) => u.username?.trim().toLowerCase() === normalized
+    );
     if (!candidate || candidate.password !== password) {
       return { ok: false, error: "Invalid username or password." };
     }

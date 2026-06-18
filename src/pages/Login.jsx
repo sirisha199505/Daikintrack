@@ -115,6 +115,10 @@ export default function Login() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="username"
+                spellCheck={false}
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3.5 pl-11 pr-4 text-sm outline-none focus:border-daikin-400 focus:bg-white focus:ring-2 focus:ring-daikin-100"
               />
             </div>
