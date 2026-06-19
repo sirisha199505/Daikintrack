@@ -173,6 +173,48 @@ export function mapUserToApi(form) {
   return payload;
 }
 
+// ---- Branch mappers ------------------------------------------------------
+// The frontend keys branches by their slug ("north") everywhere — user.branchId,
+// product.branchId, etc. — so we keep `id` as the slug and carry the backend's
+// integer primary key separately as `apiId` for update/delete calls.
+export function mapBranchFromApi(b) {
+  if (!b) return null;
+  return {
+    apiId: b.id,
+    id: b.slug,
+    slug: b.slug,
+    name: b.name,
+    code: b.code || "",
+    location: b.location || "",
+    address: b.address || "",
+    contact: b.contact || "",
+    manager: b.manager || "",
+    status: b.status || (b.active === false ? "Inactive" : "Active"),
+    color: b.color || null,
+    gradient: b.gradient || null,
+  };
+}
+
+export function mapBranchToApi(form) {
+  const status = form.status || "Active";
+  const payload = {
+    name: (form.name || "").trim(),
+    code: (form.code || "").trim(),
+    location: form.location || "",
+    address: form.address || "",
+    contact: form.contact || "",
+    manager: form.manager || "",
+    status,
+    active: status !== "Inactive",
+  };
+  if (form.color) payload.color = form.color;
+  if (form.gradient) payload.gradient = form.gradient;
+  // slug is required by the backend; on create we generate it, on edit it's carried.
+  const slug = form.slug || form.id;
+  if (slug) payload.slug = slug;
+  return payload;
+}
+
 // ---- Endpoints -----------------------------------------------------------
 export const Api = {
   async login(username, password) {
@@ -206,5 +248,25 @@ export const Api = {
 
   async deleteUser(id) {
     await apiRequest(`/users/${id}`, { method: "DELETE" });
+  },
+
+  // ---- Branches (server-backed, shared across all devices) ----
+  async listBranches() {
+    const res = await apiRequest("/branches");
+    return res.data || [];
+  },
+
+  async createBranch(payload) {
+    const res = await apiRequest("/branches", { method: "POST", body: payload });
+    return res.data;
+  },
+
+  async updateBranch(apiId, payload) {
+    const res = await apiRequest(`/branches/${apiId}`, { method: "PUT", body: payload });
+    return res.data;
+  },
+
+  async deleteBranch(apiId) {
+    await apiRequest(`/branches/${apiId}`, { method: "DELETE" });
   },
 };

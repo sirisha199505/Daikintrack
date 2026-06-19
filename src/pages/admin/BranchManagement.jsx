@@ -50,10 +50,14 @@ export default function BranchManagement() {
     return map;
   }, [users]);
 
-  function confirmDelete() {
-    deleteBranch(toDelete.id);
-    toast(`Deleted ${toDelete.name}`, "info");
-    setToDelete(null);
+  async function confirmDelete() {
+    try {
+      await deleteBranch(toDelete.id);
+      toast(`Deleted ${toDelete.name}`, "info");
+      setToDelete(null);
+    } catch (e) {
+      toast(e.message || "Failed to delete branch.", "error");
+    }
   }
 
   if (loading) {
@@ -206,8 +210,8 @@ export default function BranchManagement() {
         <div className="p-6">
           <p className="text-sm text-slate-600">
             Are you sure you want to delete{" "}
-            <span className="font-semibold text-slate-800">{toDelete?.name}</span>? Products and users
-            assigned to it will remain but become unassigned.
+            <span className="font-semibold text-slate-800">{toDelete?.name}</span>? Its products will
+            be permanently removed, and any users assigned to it will become unassigned.
           </p>
           <div className="mt-6 flex justify-end gap-3">
             <Button variant="subtle" onClick={() => setToDelete(null)}>Cancel</Button>

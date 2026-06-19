@@ -1,9 +1,16 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { usePersistentState } from "../hooks/usePersistentState";
-import { BRANCHES, CATEGORIES } from "../data/seed";
+import { CATEGORIES } from "../data/seed";
 import { useAuth } from "./AuthContext";
-import { Api, ensureBranchMap, mapUserFromApi, mapUserToApi } from "../lib/api";
+import {
+  Api,
+  ensureBranchMap,
+  mapUserFromApi,
+  mapUserToApi,
+  mapBranchFromApi,
+  mapBranchToApi,
+} from "../lib/api";
 
 const AdminContext = createContext(null);
 
@@ -41,8 +48,12 @@ export function AdminProvider({ children }) {
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState(null);
 
-  // ---- Branches & categories: still local (seed) for now ----
-  const [branches, setBranches] = usePersistentState("daikin.admin.branches", BRANCHES);
+  // ---- Branches: backed by the API (synced across all devices) ----
+  const [branches, setBranches] = useState([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
+  const [branchesError, setBranchesError] = useState(null);
+
+  // ---- Categories: still local (seed) for now ----
   const [categories, setCategories] = usePersistentState("daikin.admin.categories", CATEGORIES);
 
   const refreshUsers = useCallback(async () => {
@@ -68,15 +79,68 @@ export function AdminProvider({ children }) {
     refreshUsers();
   }, [refreshUsers]);
 
+  // Branches are readable by any authenticated user (the catalog needs them);
+  // only admins can mutate them.
+  const refreshBranches = useCallback(async () => {
+    if (!user) {
+      setBranches([]);
+      return;
+    }
+    setBranchesLoading(true);
+    setBranchesError(null);
+    try {
+      const list = await Api.listBranches();
+      await ensureBranchMap(true);
+      setBranches(list.map(mapBranchFromApi));
+    } catch (e) {
+      console.error("Failed to load branches:", e);
+      setBranchesError(e.message || "Failed to load branches.");
+    } finally {
+      setBranchesLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    refreshBranches();
+  }, [refreshBranches]);
+
+  // Resolve a branch slug to its backend integer id (and back) straight from the
+  // loaded branch list — the authoritative source — so a stale branch-id cache
+  // can never silently drop a user's branch assignment.
+  const branchApiIdBySlug = useCallback(
+    (slug) => branches.find((b) => b.id === slug)?.apiId ?? null,
+    [branches]
+  );
+
+  // After a write, the API returns branch_id as an integer. mapUserFromApi turns
+  // it into a slug via the cache; if that misses, fall back to the branch list.
+  const reconcileUserBranch = useCallback(
+    (u) => {
+      if (!u || u.branchId == null) return u;
+      if (branches.some((b) => b.id === u.branchId)) return u; // already a known slug
+      const slug = branches.find((b) => b.apiId === u.branchId)?.id;
+      return slug ? { ...u, branchId: slug } : u;
+    },
+    [branches]
+  );
+
   const addUser = useCallback(async (data) => {
-    const created = await Api.createUser(mapUserToApi(data));
-    setUsers((prev) => [mapUserFromApi(created), ...prev]);
-  }, []);
+    const payload = mapUserToApi(data);
+    payload.branch_id =
+      data.role === "admin" || !data.branchId ? null : branchApiIdBySlug(data.branchId);
+    const created = await Api.createUser(payload);
+    setUsers((prev) => [reconcileUserBranch(mapUserFromApi(created)), ...prev]);
+  }, [branchApiIdBySlug, reconcileUserBranch]);
 
   const updateUser = useCallback(async (id, data) => {
-    const updated = await Api.updateUser(id, mapUserToApi(data));
-    setUsers((prev) => prev.map((u) => (u.id === id ? mapUserFromApi(updated) : u)));
-  }, []);
+    const payload = mapUserToApi(data);
+    payload.branch_id =
+      data.role === "admin" || !data.branchId ? null : branchApiIdBySlug(data.branchId);
+    const updated = await Api.updateUser(id, payload);
+    setUsers((prev) =>
+      prev.map((u) => (u.id === id ? reconcileUserBranch(mapUserFromApi(updated)) : u))
+    );
+  }, [branchApiIdBySlug, reconcileUserBranch]);
 
   const deleteUser = useCallback(async (id) => {
     await Api.deleteUser(id);
@@ -88,25 +152,32 @@ export function AdminProvider({ children }) {
     setUsers((prev) => prev.map((u) => (u.id === id ? mapUserFromApi(updated) : u)));
   }, []);
 
-  // ---- Branches (local only — backend wiring is a later step) ----
-  const addBranch = useCallback((data) => {
-    setBranches((prev) => {
-      const palette = BRANCH_PALETTE[prev.length % BRANCH_PALETTE.length];
-      return [
-        ...prev,
-        { id: slugify(data.name) || `b-${Date.now()}`, status: "Active", ...palette, ...data },
-      ];
-    });
-  }, [setBranches]);
+  // ---- Branches (server-backed) ----
+  const addBranch = useCallback(async (data) => {
+    const slug = slugify(data.name) || `b-${Date.now()}`;
+    const palette = BRANCH_PALETTE[branches.length % BRANCH_PALETTE.length];
+    const created = await Api.createBranch(
+      mapBranchToApi({ color: palette.color, gradient: palette.gradient, ...data, slug })
+    );
+    setBranches((prev) => [...prev, mapBranchFromApi(created)]);
+    await ensureBranchMap(true);
+  }, [branches.length]);
 
-  const updateBranch = useCallback((id, data) => {
-    setBranches((prev) => prev.map((b) => (b.id === id ? { ...b, ...data } : b)));
-  }, [setBranches]);
+  const updateBranch = useCallback(async (id, data) => {
+    const target = branches.find((b) => b.id === id);
+    if (!target) return;
+    const updated = await Api.updateBranch(target.apiId, mapBranchToApi({ ...target, ...data }));
+    setBranches((prev) => prev.map((b) => (b.id === id ? mapBranchFromApi(updated) : b)));
+    await ensureBranchMap(true);
+  }, [branches]);
 
-  const deleteBranch = useCallback(
-    (id) => setBranches((prev) => prev.filter((b) => b.id !== id)),
-    [setBranches]
-  );
+  const deleteBranch = useCallback(async (id) => {
+    const target = branches.find((b) => b.id === id);
+    if (!target) return;
+    await Api.deleteBranch(target.apiId);
+    setBranches((prev) => prev.filter((b) => b.id !== id));
+    await ensureBranchMap(true);
+  }, [branches]);
 
   // ---- Categories (local only — backend wiring is a later step) ----
   const addCategory = useCallback((data) => {
@@ -132,6 +203,9 @@ export function AdminProvider({ children }) {
       usersError,
       refreshUsers,
       branches,
+      branchesLoading,
+      branchesError,
+      refreshBranches,
       categories,
       addUser,
       updateUser,
@@ -150,6 +224,9 @@ export function AdminProvider({ children }) {
       usersError,
       refreshUsers,
       branches,
+      branchesLoading,
+      branchesError,
+      refreshBranches,
       categories,
       addUser,
       updateUser,

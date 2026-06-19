@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Modal from "../ui/Modal";
 import { Button } from "../ui/Primitives";
 import { useAdmin } from "../../context/AdminContext";
+import { useToast } from "../ui/Toast";
 
 const EMPTY = {
   name: "",
@@ -27,9 +28,11 @@ const inputCls =
 
 export default function BranchFormModal({ open, onClose, initial, onSaved }) {
   const { branches, addBranch, updateBranch } = useAdmin();
+  const { toast } = useToast();
   const isEdit = Boolean(initial?.id);
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -44,14 +47,14 @@ export default function BranchFormModal({ open, onClose, initial, onSaved }) {
     setForm((f) => ({ ...f, [k]: v }));
   }
 
-  function submit(e) {
+  async function submit(e) {
     e.preventDefault();
     const errs = {};
     if (!form.name.trim()) errs.name = "Required";
     if (!form.code.trim()) errs.code = "Required";
     // Branch code must be unique.
     const clash = branches.find(
-      (b) => b.code.toLowerCase() === form.code.trim().toLowerCase() && b.id !== initial?.id
+      (b) => (b.code || "").toLowerCase() === form.code.trim().toLowerCase() && b.id !== initial?.id
     );
     if (clash) errs.code = "Code already in use";
     if (Object.keys(errs).length) return setErrors(errs);
@@ -61,10 +64,17 @@ export default function BranchFormModal({ open, onClose, initial, onSaved }) {
       name: form.name.trim(),
       code: form.code.trim().toUpperCase(),
     };
-    if (isEdit) updateBranch(initial.id, payload);
-    else addBranch(payload);
-    onSaved?.(isEdit);
-    onClose();
+    setSaving(true);
+    try {
+      if (isEdit) await updateBranch(initial.id, payload);
+      else await addBranch(payload);
+      onSaved?.(isEdit);
+      onClose();
+    } catch (err) {
+      toast(err.message || "Failed to save branch.", "error");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -122,7 +132,9 @@ export default function BranchFormModal({ open, onClose, initial, onSaved }) {
 
         <div className="flex justify-end gap-3 pt-2">
           <Button type="button" variant="subtle" onClick={onClose}>Cancel</Button>
-          <Button type="submit">{isEdit ? "Save Changes" : "Add Branch"}</Button>
+          <Button type="submit" disabled={saving}>
+            {saving ? "Saving…" : isEdit ? "Save Changes" : "Add Branch"}
+          </Button>
         </div>
       </form>
     </Modal>
