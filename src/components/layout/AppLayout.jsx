@@ -1,19 +1,33 @@
 import { useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { LogOut, Menu, X, ChevronDown } from "lucide-react";
+import { LogOut, ChevronDown, Building2, Check } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { useInventory } from "../../context/InventoryContext";
 import { roleLabel } from "../../utils/format";
 import Sidebar from "./Sidebar";
+import BottomNav from "./BottomNav";
 import logo from "/DAIKIN_logo.PNG";
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
+  const { branches, viewBranchId, setViewBranchId } = useInventory();
   const navigate = useNavigate();
-  const [drawer, setDrawer] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [branchMenuOpen, setBranchMenuOpen] = useState(false);
 
   const userRole = roleLabel(user.role);
+  // Store managers can view another branch read-only. The "active" branch is the
+  // one they've switched to, or their own assigned branch by default.
+  const canSwitchBranch = user.role === "store_manager" && branches.length > 0;
+  const activeBranchId = viewBranchId || user.branchId;
+
+  function selectBranch(slug) {
+    // Switching back to their own branch clears the override (default scope).
+    setViewBranchId(slug === user.branchId ? null : slug);
+    setBranchMenuOpen(false);
+    setProfileOpen(false);
+  }
 
   function handleLogout() {
     logout();
@@ -25,12 +39,6 @@ export default function AppLayout() {
       {/* Top bar */}
       <header className="bg-daikin-gradient relative z-30 flex h-16 shrink-0 items-center justify-between px-3 sm:px-5">
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setDrawer(true)}
-            className="grid h-10 w-10 place-items-center rounded-lg text-white/90 hover:bg-white/10 lg:hidden cursor-pointer"
-          >
-            <Menu className="h-6 w-6" />
-          </button>
           <div className="flex items-center gap-2.5">
             <motion.img
               src={logo}
@@ -72,7 +80,10 @@ export default function AppLayout() {
               <>
                 <div
                   className="fixed inset-0 z-40"
-                  onClick={() => setProfileOpen(false)}
+                  onClick={() => {
+                    setProfileOpen(false);
+                    setBranchMenuOpen(false);
+                  }}
                 />
                 <motion.div
                   initial={{ opacity: 0, y: -8, scale: 0.97 }}
@@ -94,6 +105,49 @@ export default function AppLayout() {
                       </div>
                     </div>
                   </div>
+                  {canSwitchBranch && (
+                    <div className="border-b border-slate-100">
+                      <button
+                        onClick={() => setBranchMenuOpen((o) => !o)}
+                        className="flex w-full items-center gap-2.5 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                      >
+                        <Building2 className="h-4 w-4 text-daikin-600" />
+                        <span className="flex-1 text-left">Switch branch</span>
+                        <ChevronDown
+                          className={`h-4 w-4 text-slate-400 transition-transform ${
+                            branchMenuOpen ? "rotate-180" : ""
+                          }`}
+                        />
+                      </button>
+                      {branchMenuOpen && (
+                        <div className="max-h-56 overflow-y-auto pb-1">
+                          {branches.map((b) => {
+                            const isActive = b.id === activeBranchId;
+                            const isOwn = b.id === user.branchId;
+                            return (
+                              <button
+                                key={b.id}
+                                onClick={() => selectBranch(b.id)}
+                                className={`flex w-full items-center gap-2.5 py-2 pl-11 pr-4 text-sm cursor-pointer hover:bg-slate-50 ${
+                                  isActive ? "font-bold text-daikin-700" : "text-slate-600"
+                                }`}
+                              >
+                                <span
+                                  className="h-2 w-2 shrink-0 rounded-full"
+                                  style={{ background: b.color || "#94a3b8" }}
+                                />
+                                <span className="flex-1 truncate text-left">
+                                  {b.name}
+                                  {isOwn ? " (mine)" : ""}
+                                </span>
+                                {isActive && <Check className="h-4 w-4 shrink-0" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <button
                     onClick={() => {
                       setProfileOpen(false);
@@ -112,58 +166,18 @@ export default function AppLayout() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Desktop sidebar */}
+        {/* Desktop sidebar (mobile uses the bottom tab bar instead) */}
         <aside className="hidden w-64 shrink-0 border-r border-slate-200 lg:block">
           <Sidebar />
         </aside>
 
-        {/* Mobile drawer */}
-        <AnimatePresence>
-          {drawer && (
-            <>
-              <motion.div
-                className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm lg:hidden"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setDrawer(false)}
-              />
-              <motion.aside
-                className="fixed inset-y-0 left-0 z-50 w-72 shadow-2xl lg:hidden"
-                initial={{ x: "-100%" }}
-                animate={{ x: 0 }}
-                exit={{ x: "-100%" }}
-                transition={{ type: "spring", damping: 28, stiffness: 300 }}
-              >
-                <div className="flex h-14 items-center justify-between bg-daikin-gradient px-4">
-                  <motion.img
-                    src={logo}
-                    alt="Daikin"
-                    className="h-14 w-auto"
-                    initial={{ clipPath: "inset(0 100% 0 0)" }}
-                    animate={{ clipPath: "inset(0 0% 0 0)" }}
-                    transition={{ duration: 1.4, ease: "easeInOut" }}
-                  />
-                  <button
-                    onClick={() => setDrawer(false)}
-                    className="grid h-9 w-9 place-items-center rounded-lg text-white/90 hover:bg-white/10 cursor-pointer"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-                <div className="h-[calc(100%-3.5rem)]">
-                  <Sidebar onNavigate={() => setDrawer(false)} />
-                </div>
-              </motion.aside>
-            </>
-          )}
-        </AnimatePresence>
-
         {/* Content */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-7xl p-4 sm:p-6">
+        <main className="flex flex-1 flex-col overflow-y-auto">
+          <div className="mx-auto w-full max-w-7xl flex-1 p-4 sm:p-6">
             <Outlet />
           </div>
+          {/* Bottom tab bar — the sole navigation for every role */}
+          <BottomNav />
         </main>
       </div>
     </div>

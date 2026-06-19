@@ -64,6 +64,20 @@ body {
   background: #a7bfd6;
 }
 
+/* Recharts: kill the black focus outline that shows on tap/click (mobile) */
+.recharts-wrapper:focus,
+.recharts-wrapper:focus-visible,
+.recharts-surface:focus,
+.recharts-surface:focus-visible,
+.recharts-wrapper svg:focus,
+.recharts-layer:focus,
+.recharts-sector:focus,
+.recharts-rectangle:focus,
+.recharts-wrapper *:focus,
+.recharts-wrapper *:focus-visible {
+  outline: none !important;
+}
+
 /* Utilities */
 .glass {
   background: rgba(255, 255, 255, 0.08);

@@ -32,7 +32,9 @@ const selectCls =
   "rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-600 outline-none focus:border-daikin-400 cursor-pointer";
 
 // Reusable product management surface. branchId=null → all branches (admin).
-export default function ProductManager({ branchId = null, title, subtitle }) {
+// readOnly hides all mutation controls (used when a store manager is viewing
+// another branch, which the backend permits for reads only).
+export default function ProductManager({ branchId = null, title, subtitle, readOnly = false }) {
   const { products, categories, branches, deleteProduct } = useInventory();
   const { toast } = useToast();
   const loading = usePageLoad();
@@ -104,14 +106,16 @@ export default function ProductManager({ branchId = null, title, subtitle }) {
           <h1 className="text-2xl font-bold text-slate-800">{title}</h1>
           <p className="text-sm text-slate-500">{subtitle}</p>
         </div>
-        <Button
-          onClick={() => {
-            setEditing(null);
-            setFormOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4" /> Add Product
-        </Button>
+        {!readOnly && (
+          <Button
+            onClick={() => {
+              setEditing(null);
+              setFormOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" /> Add Product
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
@@ -199,7 +203,7 @@ export default function ProductManager({ branchId = null, title, subtitle }) {
                     <th className="px-5 py-3.5">Category</th>
                     <th className="px-5 py-3.5 text-right">Stock</th>
                     <th className="px-5 py-3.5">Status</th>
-                    <th className="px-5 py-3.5 text-right">Actions</th>
+                    {!readOnly && <th className="px-5 py-3.5 text-right">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -239,27 +243,29 @@ export default function ProductManager({ branchId = null, title, subtitle }) {
                         <td className="px-5 py-3.5">
                           <Badge tone={s.tone}>{s.label}</Badge>
                         </td>
-                        <td className="px-5 py-3.5">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              onClick={() => {
-                                setEditing(p);
-                                setFormOpen(true);
-                              }}
-                              className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-daikin-50 hover:text-daikin-600 cursor-pointer"
-                              title="Edit"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => setToDelete(p)}
-                              className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 cursor-pointer"
-                              title="Delete"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </td>
+                        {!readOnly && (
+                          <td className="px-5 py-3.5">
+                            <div className="flex justify-end gap-1.5">
+                              <button
+                                onClick={() => {
+                                  setEditing(p);
+                                  setFormOpen(true);
+                                }}
+                                className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-daikin-50 hover:text-daikin-600 cursor-pointer"
+                                title="Edit"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => setToDelete(p)}
+                                className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 cursor-pointer"
+                                title="Delete"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -294,26 +300,28 @@ export default function ProductManager({ branchId = null, title, subtitle }) {
                       {num(p.stock)} units
                     </span>
                   </div>
-                  <div className="mt-3 flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => {
-                        setEditing(p);
-                        setFormOpen(true);
-                      }}
-                    >
-                      <Pencil className="h-3.5 w-3.5" /> Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setToDelete(p)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                    </Button>
-                  </div>
+                  {!readOnly && (
+                    <div className="mt-3 flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => {
+                          setEditing(p);
+                          setFormOpen(true);
+                        }}
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setToDelete(p)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                      </Button>
+                    </div>
+                  )}
                 </Card>
               );
             })}

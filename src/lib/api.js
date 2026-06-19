@@ -316,8 +316,11 @@ export const Api = {
   },
 
   // ---- Products (server-backed). Prices are whole rupees. ----
-  async listProducts() {
-    const res = await apiRequest("/products?page_size=300");
+  // Pass { branchId } to scope the read to one branch (used by the store
+  // manager's read-only "Switch Branch" view; backend allows GET cross-branch).
+  async listProducts({ branchId } = {}) {
+    const q = branchId != null ? `&branch_id=${encodeURIComponent(branchId)}` : "";
+    const res = await apiRequest(`/products?page_size=300${q}`);
     return res.data || [];
   },
   async createProduct(payload) {
@@ -345,8 +348,10 @@ export const Api = {
   },
 
   // ---- Transactions (server-backed; create adjusts stock atomically) ----
-  async listTransactions() {
-    const res = await apiRequest("/transactions?page_size=300");
+  // Pass { branchId } to scope the read to one branch (store manager view).
+  async listTransactions({ branchId } = {}) {
+    const q = branchId != null ? `&branch_id=${encodeURIComponent(branchId)}` : "";
+    const res = await apiRequest(`/transactions?page_size=300${q}`);
     return res.data || [];
   },
   async createTransaction(payload) {

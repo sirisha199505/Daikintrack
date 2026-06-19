@@ -6,6 +6,7 @@ import {
   Boxes,
   PackageX,
   CheckCircle2,
+  Eye,
   PieChart as PieIcon,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
@@ -18,10 +19,15 @@ import { num } from "../../utils/format";
 
 export default function ManagerDashboard() {
   const { user } = useAuth();
-  const { categoryBreakdown, statsFor } = useInventory();
+  const { categoryBreakdown, statsFor, branches, viewBranchId, isViewingOtherBranch } =
+    useInventory();
   const navigate = useNavigate();
   const loading = usePageLoad();
-  const branchId = user.branchId;
+  // The branch currently being viewed — own branch by default, or another branch
+  // picked via "Switch Branch" (read-only).
+  const branchId = viewBranchId || user.branchId;
+  const viewedBranch =
+    branches.find((b) => b.id === branchId) || (branchId === user.branchId ? user.branch : null);
 
   const cats = useMemo(() => categoryBreakdown(branchId), [categoryBreakdown, branchId]);
   const stats = useMemo(() => statsFor(branchId), [statsFor, branchId]);
@@ -37,24 +43,36 @@ export default function ManagerDashboard() {
   const lowUnits = useMemo(() => lowData.reduce((s, d) => s + d.value, 0), [lowData]);
   if (loading) return <ManagerSkeleton />;
 
-  const branchLabel = user.branch ? `${user.branch.name} · ${user.branch.location}` : "All Hubs";
+  const branchLabel = viewedBranch
+    ? `${viewedBranch.name} · ${viewedBranch.location}`
+    : "All Hubs";
 
   return (
     <div className="space-y-6">
       <GreetingHeader
         name={user.name}
-        subtitle={user.branch ? branchLabel : "All Hubs · Store Operations"}
+        subtitle={viewedBranch ? branchLabel : "All Hubs · Store Operations"}
         badge={
-          user.branch ? (
+          viewedBranch ? (
             <div className="hidden shrink-0 rounded-xl bg-white/10 px-4 py-2.5 text-right ring-1 ring-white/15 sm:block">
               <div className="text-[10px] font-semibold uppercase tracking-widest text-white/60">
                 Code
               </div>
-              <div className="text-lg font-bold">{user.branch.code}</div>
+              <div className="text-lg font-bold">{viewedBranch.code}</div>
             </div>
           ) : null
         }
       />
+
+      {isViewingOtherBranch && (
+        <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <Eye className="h-4 w-4 shrink-0" />
+          <span>
+            Viewing <strong>{viewedBranch?.name}</strong> in read-only mode. Switch back to your
+            branch from the profile menu to record stock movements.
+          </span>
+        </div>
+      )}
 
       {/* ===== Stock Overview ===== */}
       <section>
@@ -125,14 +143,16 @@ export default function ManagerDashboard() {
         </Card>
       </div>
 
-      <Card className="flex flex-col gap-3 p-5 sm:flex-row">
-        <Button size="lg" className="flex-1" onClick={() => navigate("/app/scan?op=in")}>
-          <ArrowDownLeft className="h-4 w-4" /> Check In
-        </Button>
-        <Button size="lg" variant="danger" className="flex-1" onClick={() => navigate("/app/scan?op=out")}>
-          <ArrowUpRight className="h-4 w-4" /> Check Out
-        </Button>
-      </Card>
+      {!isViewingOtherBranch && (
+        <Card className="flex flex-col gap-3 p-5 sm:flex-row">
+          <Button size="lg" className="flex-1" onClick={() => navigate("/app/scan?op=in")}>
+            <ArrowDownLeft className="h-4 w-4" /> Check In
+          </Button>
+          <Button size="lg" variant="danger" className="flex-1" onClick={() => navigate("/app/scan?op=out")}>
+            <ArrowUpRight className="h-4 w-4" /> Check Out
+          </Button>
+        </Card>
+      )}
     </div>
   );
 }

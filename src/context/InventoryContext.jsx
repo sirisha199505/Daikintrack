@@ -26,6 +26,17 @@ export function InventoryProvider({ children }) {
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsError, setProductsError] = useState(null);
 
+  // ---- Store-manager "Switch Branch" view ----
+  // Slug of the branch the manager is currently viewing (read-only). null means
+  // their own assigned branch (the default backend scope). Other roles ignore it.
+  const [viewBranchId, setViewBranchId] = useState(null);
+  const isViewingOtherBranch =
+    user?.role === "store_manager" && !!viewBranchId && viewBranchId !== user.branchId;
+  // Reset the view whenever the signed-in user changes (login / logout).
+  useEffect(() => {
+    setViewBranchId(null);
+  }, [user?.id]);
+
   // ---- slug <-> backend id helpers (authoritative: the loaded admin lists) ----
   const branchSlug = useCallback(
     (apiId) => branches.find((b) => b.apiId === apiId)?.id ?? null,
@@ -114,6 +125,13 @@ export function InventoryProvider({ children }) {
     [rawTransactions, mapTxnFromApi]
   );
 
+  // Backend branch_id to scope reads to when a manager is viewing another branch
+  // (null = default scope: own branch for managers, everything for distributors).
+  const viewBranchApiId = useMemo(
+    () => (viewBranchId ? branchApiId(viewBranchId) : null),
+    [viewBranchId, branchApiId]
+  );
+
   // ---- Loaders -------------------------------------------------------------
   const refreshProducts = useCallback(async () => {
     if (!user) {
@@ -123,14 +141,14 @@ export function InventoryProvider({ children }) {
     setProductsLoading(true);
     setProductsError(null);
     try {
-      setRawProducts(await Api.listProducts());
+      setRawProducts(await Api.listProducts({ branchId: viewBranchApiId }));
     } catch (e) {
       console.error("Failed to load products:", e);
       setProductsError(e.message || "Failed to load products.");
     } finally {
       setProductsLoading(false);
     }
-  }, [user]);
+  }, [user, viewBranchApiId]);
 
   const refreshTransactions = useCallback(async () => {
     if (!user) {
@@ -138,11 +156,11 @@ export function InventoryProvider({ children }) {
       return;
     }
     try {
-      setRawTransactions(await Api.listTransactions());
+      setRawTransactions(await Api.listTransactions({ branchId: viewBranchApiId }));
     } catch (e) {
       console.error("Failed to load transactions:", e);
     }
-  }, [user]);
+  }, [user, viewBranchApiId]);
 
   useEffect(() => {
     refreshProducts();
@@ -291,6 +309,9 @@ export function InventoryProvider({ children }) {
       statsFor,
       categoryBreakdown,
       nextInvoiceNo,
+      viewBranchId,
+      setViewBranchId,
+      isViewingOtherBranch,
     }),
     [
       products,
@@ -311,6 +332,8 @@ export function InventoryProvider({ children }) {
       statsFor,
       categoryBreakdown,
       nextInvoiceNo,
+      viewBranchId,
+      isViewingOtherBranch,
     ]
   );
 

@@ -21,24 +21,23 @@ export default function GreetingHeader({ name, subtitle, badge }) {
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="bg-daikin-gradient relative overflow-hidden rounded-2xl p-5 sm:p-6 text-white shadow-[var(--shadow-soft)]"
+      className="bg-daikin-gradient relative overflow-hidden rounded-2xl px-4 py-3 text-white shadow-[var(--shadow-soft)]"
     >
-      <div className="absolute -right-10 -top-10 h-44 w-44 rounded-full bg-white/5" />
-      <div className="absolute -bottom-16 right-24 h-40 w-40 rounded-full bg-white/5" />
-      <div className="relative flex items-center justify-between gap-4">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/60">
+      <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white/5" />
+      <div className="relative flex flex-col gap-2">
+        <div className="min-w-0">
+          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/60">
             {greeting(now)}
           </div>
-          <h1 className="mt-1 text-2xl font-extrabold sm:text-3xl">{name}</h1>
-          <p className="mt-1 text-sm text-white/75">{subtitle}</p>
+          <h1 className="truncate text-lg font-extrabold leading-tight sm:text-xl">{name}</h1>
+          <p className="text-xs text-white/75">{subtitle}</p>
         </div>
         {badge ? (
           badge
         ) : (
-          <div className="hidden shrink-0 rounded-xl bg-white/10 px-4 py-2.5 text-right ring-1 ring-white/15 sm:block">
-            <div className="text-lg font-bold tabular-nums">{fmtTime(now)}</div>
-            <div className="text-[11px] text-white/60">{dateStr}</div>
+          <div className="flex items-center gap-2 self-start rounded-lg bg-white/10 px-2.5 py-1 text-white/90 ring-1 ring-white/15">
+            <span className="text-sm font-bold tabular-nums">{fmtTime(now)}</span>
+            <span className="text-[10px] text-white/60">{dateStr}</span>
           </div>
         )}
       </div>

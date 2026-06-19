@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Boxes,
@@ -110,66 +110,19 @@ export default function AdminDashboard() {
     <div className="space-y-6">
       <GreetingHeader name={user.name} subtitle={roleLabel(user.role)} />
 
-      {/* ===== Stock Overview: In Stock (Donut) + Low Stock (Pie) ===== */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        {/* In Stock — Donut */}
-        <Card className="p-5">
-          <div className="flex items-start justify-between">
-            <div>
-              <h3 className="flex items-center gap-2 text-base font-bold text-slate-800">
-                <Boxes className="h-4 w-4 text-daikin-600" /> In Stock
-              </h3>
-              <p className="text-xs text-slate-400">Total available stock</p>
-            </div>
-            <span className="rounded-full bg-daikin-50 px-3 py-1 text-sm font-bold text-daikin-700">
-              {num(overall.totalStock)}
-            </span>
-          </div>
-          {inStockData.length ? (
-            <div className="mt-2">
-              <DonutChart
-                data={inStockData}
-                centerValue={num(overall.totalStock)}
-                centerLabel="in stock"
-                unit="units"
-              />
-            </div>
-          ) : (
-            <EmptyState icon={PackageX} title="No stock available" />
-          )}
-        </Card>
+      {/* ===== Stock Overview: In Stock (Donut) + Low Stock (Bars) =====
+          Memoized so tapping a hub tab below never re-renders (and thus never
+          re-animates / "refreshes") these overall charts. */}
+      <StockOverview
+        inStockData={inStockData}
+        totalStock={overall.totalStock}
+        lowStock={overall.lowStock}
+        lowRows={lowRows}
+        lowStackCats={lowStackCats}
+      />
 
-        {/* Low Stock — Pie */}
-        <Card className="p-5">
-          <div className="flex items-start justify-between">
-            <div>
-              <h3 className="flex items-center gap-2 text-base font-bold text-slate-800">
-                <PieIcon className="h-4 w-4 text-red-500" /> Low Stock
-              </h3>
-              <p className="text-xs text-slate-400">Low-stock units by store &amp; category</p>
-            </div>
-            <span className="rounded-full bg-red-50 px-3 py-1 text-sm font-bold text-red-600">
-              {num(overall.lowStock)}
-            </span>
-          </div>
-          {overall.lowStock > 0 ? (
-            <div className="mt-2">
-              <WarehouseStackChart rows={lowRows} categories={lowStackCats} height={260} />
-            </div>
-          ) : (
-            <div className="grid min-h-[220px] place-items-center">
-              <EmptyState
-                icon={CheckCircle2}
-                title="All healthy"
-                subtitle="No products are running low right now."
-              />
-            </div>
-          )}
-        </Card>
-      </div>
-
-      {/* Hub tabs */}
-      <div className="flex flex-wrap gap-2">
+      {/* Hub tabs — single straight line; scrolls horizontally if they overflow */}
+      <div className="flex gap-2 overflow-x-auto no-scrollbar">
         {branches.map((b, i) => {
           const active = index === i;
           return (
@@ -181,14 +134,14 @@ export default function AdminDashboard() {
                   ? { background: b.color, boxShadow: `0 8px 20px ${b.color}55` }
                   : undefined
               }
-              className={`relative flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition cursor-pointer ${
+              className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition cursor-pointer sm:text-sm ${
                 active
                   ? "text-white"
                   : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
               }`}
             >
               <span
-                className="h-2 w-2 rounded-full"
+                className="h-2 w-2 shrink-0 rounded-full"
                 style={{ background: active ? "#fff" : b.color }}
               />
               {b.name}
@@ -215,6 +168,67 @@ export default function AdminDashboard() {
     </div>
   );
 }
+
+// Overall In Stock + Low Stock charts. Memoized: re-renders only when its own
+// data changes, never when the hub carousel index below changes.
+const StockOverview = memo(function StockOverview({
+  inStockData,
+  totalStock,
+  lowStock,
+  lowRows,
+  lowStackCats,
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-6 md:auto-rows-fr md:grid-cols-2">
+      {/* In Stock — Donut */}
+      <Card className="flex h-full flex-col p-5">
+        <div>
+          <h3 className="flex items-center gap-2 text-base font-bold text-slate-800">
+            <Boxes className="h-4 w-4 text-daikin-600" /> In Stock
+          </h3>
+          <p className="text-xs text-slate-400">Total available stock</p>
+        </div>
+        {inStockData.length ? (
+          <div className="mt-2 flex flex-1 items-center">
+            <DonutChart
+              data={inStockData}
+              centerValue={num(totalStock)}
+              centerLabel="in stock"
+              unit="units"
+            />
+          </div>
+        ) : (
+          <div className="grid flex-1 place-items-center">
+            <EmptyState icon={PackageX} title="No stock available" />
+          </div>
+        )}
+      </Card>
+
+      {/* Low Stock — Bars */}
+      <Card className="flex h-full flex-col p-5">
+        <div>
+          <h3 className="flex items-center gap-2 text-base font-bold text-slate-800">
+            <PieIcon className="h-4 w-4 text-red-500" /> Low Stock
+          </h3>
+          <p className="text-xs text-slate-400">Low-stock units by store &amp; category</p>
+        </div>
+        {lowStock > 0 ? (
+          <div className="mt-2 flex flex-1 items-center">
+            <WarehouseStackChart rows={lowRows} categories={lowStackCats} height={260} />
+          </div>
+        ) : (
+          <div className="grid flex-1 place-items-center">
+            <EmptyState
+              icon={CheckCircle2}
+              title="All healthy"
+              subtitle="No products are running low right now."
+            />
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+});
 
 function HubCarousel({
   hub,

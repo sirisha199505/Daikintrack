@@ -205,7 +205,7 @@ export default function Login() {
             </motion.button>
 
             <p className="pt-2 text-center text-xs text-slate-400">
-              © 2026 Daikin Industries, Ltd.
+              Powered by Srinishtha Technologies LLP
             </p>
           </form>
         </div>

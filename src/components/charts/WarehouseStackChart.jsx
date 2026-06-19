@@ -5,7 +5,6 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
   Legend,
   Cell,
   LabelList,
@@ -41,8 +40,14 @@ export default function WarehouseStackChart({
     );
   };
 
+  // Give every bar a minimum slot so labels/axis ticks never collide. When the
+  // branch count outgrows the card width the chart scrolls horizontally
+  // (important on mobile, where many branches would otherwise be squashed).
+  const minWidth = Math.max(rows.length * 90, 280);
+
   return (
-    <div style={{ height }} className="w-full">
+    <div className="w-full overflow-x-auto no-scrollbar" style={{ WebkitOverflowScrolling: "touch" }}>
+      <div style={{ height, minWidth }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={rows} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
           <defs>
@@ -69,14 +74,6 @@ export default function WarehouseStackChart({
             axisLine={false}
             tickLine={false}
           />
-          <Tooltip
-            cursor={{ fill: "rgba(0,152,216,0.06)" }}
-            contentStyle={{
-              borderRadius: 12,
-              border: "1px solid #e2e8f0",
-              fontSize: 13,
-            }}
-          />
           <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" />
           {categories.map((c, ci) => (
             <Bar
@@ -99,6 +96,7 @@ export default function WarehouseStackChart({
           ))}
         </BarChart>
       </ResponsiveContainer>
+      </div>
     </div>
   );
 }
