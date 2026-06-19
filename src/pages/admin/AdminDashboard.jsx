@@ -65,8 +65,8 @@ export default function AdminDashboard() {
   const hubLow = useMemo(
     () =>
       hubCats
-        .filter((c) => c.lowCount > 0)
-        .map((c) => ({ name: c.name, value: c.lowCount, color: c.color })),
+        .filter((c) => c.lowValue > 0)
+        .map((c) => ({ name: c.name, value: c.lowValue, color: c.color })),
     [hubCats]
   );
 
@@ -84,7 +84,7 @@ export default function AdminDashboard() {
       branches.map((b) => {
         const row = { id: b.id, name: b.name };
         categoryBreakdown(b.id).forEach((c) => {
-          row[c.id] = c.lowCount;
+          row[c.id] = c.lowValue;
         });
         return row;
       }),
@@ -146,7 +146,7 @@ export default function AdminDashboard() {
               <h3 className="flex items-center gap-2 text-base font-bold text-slate-800">
                 <PieIcon className="h-4 w-4 text-red-500" /> Low Stock
               </h3>
-              <p className="text-xs text-slate-400">Low-stock items by store &amp; category</p>
+              <p className="text-xs text-slate-400">Low-stock units by store &amp; category</p>
             </div>
             <span className="rounded-full bg-red-50 px-3 py-1 text-sm font-bold text-red-600">
               {num(overall.lowStock)}
@@ -356,7 +356,7 @@ function HubCarousel({
                   Low Stock ({num(hubStats.lowStock)})
                 </div>
                 {lowData.length ? (
-                  <DonutChart data={lowData} innerRadius={0} height={150} unit="items" />
+                  <DonutChart data={lowData} innerRadius={0} height={150} unit="units" />
                 ) : (
                   <div className="grid h-[150px] place-items-center text-center text-sm text-slate-400">
                     All healthy
