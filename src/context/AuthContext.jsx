@@ -1,23 +1,29 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { BRANCHES } from "../data/seed";
 import {
   Api,
   ensureBranchMap,
   getToken,
   mapUserFromApi,
+  mapBranchFromApi,
   setToken,
 } from "../lib/api";
 
 const AuthContext = createContext(null);
 const USER_KEY = "daikin.auth.user.v3";
 
-// Attach the full branch object (name/location/code/gradient) the UI expects,
-// resolved from the slug we mapped onto the user.
-function attachBranch(u) {
+// Attach the full branch object (name/location/code) the UI expects, resolved
+// from the live branch list against the slug we mapped onto the user.
+async function attachBranch(u) {
   if (!u) return u;
-  const branch = u.branchId ? BRANCHES.find((b) => b.id === u.branchId) || null : null;
-  return { ...u, branch };
+  if (!u.branchId) return { ...u, branch: null };
+  try {
+    const list = await Api.listBranches();
+    const branch = list.map(mapBranchFromApi).find((b) => b.id === u.branchId) || null;
+    return { ...u, branch };
+  } catch {
+    return { ...u, branch: null };
+  }
 }
 
 export function AuthProvider({ children }) {
@@ -53,7 +59,8 @@ export function AuthProvider({ children }) {
       try {
         await ensureBranchMap();
         const info = await Api.me();
-        if (!cancelled) setUser(attachBranch(mapUserFromApi(info)));
+        const withBranch = await attachBranch(mapUserFromApi(info));
+        if (!cancelled) setUser(withBranch);
       } catch {
         if (!cancelled) {
           setToken(null);
@@ -76,7 +83,7 @@ export function AuthProvider({ children }) {
       const { token, info } = await Api.login(username.trim(), password);
       setToken(token);
       await ensureBranchMap(true);
-      const mapped = attachBranch(mapUserFromApi(info));
+      const mapped = await attachBranch(mapUserFromApi(info));
       setUser(mapped);
       return { ok: true, user: mapped };
     } catch (e) {

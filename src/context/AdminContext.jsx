@@ -1,7 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { usePersistentState } from "../hooks/usePersistentState";
-import { CATEGORIES } from "../data/seed";
 import { useAuth } from "./AuthContext";
 import {
   Api,
@@ -10,6 +8,8 @@ import {
   mapUserToApi,
   mapBranchFromApi,
   mapBranchToApi,
+  mapCategoryFromApi,
+  mapCategoryToApi,
 } from "../lib/api";
 
 const AdminContext = createContext(null);
@@ -53,8 +53,10 @@ export function AdminProvider({ children }) {
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [branchesError, setBranchesError] = useState(null);
 
-  // ---- Categories: still local (seed) for now ----
-  const [categories, setCategories] = usePersistentState("daikin.admin.categories", CATEGORIES);
+  // ---- Categories: backed by the API (synced across all devices) ----
+  const [categories, setCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [categoriesError, setCategoriesError] = useState(null);
 
   const refreshUsers = useCallback(async () => {
     if (!user || user.role !== "admin") {
@@ -103,6 +105,29 @@ export function AdminProvider({ children }) {
   useEffect(() => {
     refreshBranches();
   }, [refreshBranches]);
+
+  // Categories are readable by any authenticated user; only admins can mutate.
+  const refreshCategories = useCallback(async () => {
+    if (!user) {
+      setCategories([]);
+      return;
+    }
+    setCategoriesLoading(true);
+    setCategoriesError(null);
+    try {
+      const list = await Api.listCategories();
+      setCategories(list.map(mapCategoryFromApi));
+    } catch (e) {
+      console.error("Failed to load categories:", e);
+      setCategoriesError(e.message || "Failed to load categories.");
+    } finally {
+      setCategoriesLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    refreshCategories();
+  }, [refreshCategories]);
 
   // Resolve a branch slug to its backend integer id (and back) straight from the
   // loaded branch list — the authoritative source — so a stale branch-id cache
@@ -179,22 +204,27 @@ export function AdminProvider({ children }) {
     await ensureBranchMap(true);
   }, [branches]);
 
-  // ---- Categories (local only — backend wiring is a later step) ----
-  const addCategory = useCallback((data) => {
-    setCategories((prev) => [
-      ...prev,
-      { id: slugify(data.name) || `c-${Date.now()}`, color: CATEGORY_PALETTE[prev.length % CATEGORY_PALETTE.length], ...data },
-    ]);
-  }, [setCategories]);
+  // ---- Categories (server-backed) ----
+  const addCategory = useCallback(async (data) => {
+    const slug = slugify(data.name) || `c-${Date.now()}`;
+    const color = data.color || CATEGORY_PALETTE[categories.length % CATEGORY_PALETTE.length];
+    const created = await Api.createCategory(mapCategoryToApi({ ...data, color, slug }));
+    setCategories((prev) => [...prev, mapCategoryFromApi(created)]);
+  }, [categories.length]);
 
-  const updateCategory = useCallback((id, data) => {
-    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, ...data } : c)));
-  }, [setCategories]);
+  const updateCategory = useCallback(async (id, data) => {
+    const target = categories.find((c) => c.id === id);
+    if (!target) return;
+    const updated = await Api.updateCategory(target.apiId, mapCategoryToApi({ ...target, ...data }));
+    setCategories((prev) => prev.map((c) => (c.id === id ? mapCategoryFromApi(updated) : c)));
+  }, [categories]);
 
-  const deleteCategory = useCallback(
-    (id) => setCategories((prev) => prev.filter((c) => c.id !== id)),
-    [setCategories]
-  );
+  const deleteCategory = useCallback(async (id) => {
+    const target = categories.find((c) => c.id === id);
+    if (!target) return;
+    await Api.deleteCategory(target.apiId);
+    setCategories((prev) => prev.filter((c) => c.id !== id));
+  }, [categories]);
 
   const value = useMemo(
     () => ({
@@ -207,6 +237,9 @@ export function AdminProvider({ children }) {
       branchesError,
       refreshBranches,
       categories,
+      categoriesLoading,
+      categoriesError,
+      refreshCategories,
       addUser,
       updateUser,
       deleteUser,
@@ -228,6 +261,9 @@ export function AdminProvider({ children }) {
       branchesError,
       refreshBranches,
       categories,
+      categoriesLoading,
+      categoriesError,
+      refreshCategories,
       addUser,
       updateUser,
       deleteUser,

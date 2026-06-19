@@ -31,9 +31,10 @@ export default function ManagerDashboard() {
     [cats]
   );
   const lowData = useMemo(
-    () => cats.filter((c) => c.lowCount > 0).map((c) => ({ name: c.name, value: c.lowCount, color: c.color })),
+    () => cats.filter((c) => c.lowValue > 0).map((c) => ({ name: c.name, value: c.lowValue, color: c.color })),
     [cats]
   );
+  const lowUnits = useMemo(() => lowData.reduce((s, d) => s + d.value, 0), [lowData]);
   if (loading) return <ManagerSkeleton />;
 
   const branchLabel = user.branch ? `${user.branch.name} · ${user.branch.location}` : "All Hubs";
@@ -105,7 +106,12 @@ export default function ManagerDashboard() {
           </div>
           {lowData.length ? (
             <div className="mt-2">
-              <DonutChart data={lowData} innerRadius={0} unit="items" />
+              <DonutChart
+                data={lowData}
+                centerValue={num(lowUnits)}
+                centerLabel="low units"
+                unit="units"
+              />
             </div>
           ) : (
             <div className="grid min-h-[220px] place-items-center">

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Modal from "../ui/Modal";
 import { Button } from "../ui/Primitives";
 import { useAdmin } from "../../context/AdminContext";
+import { useToast } from "../ui/Toast";
 
 const SWATCHES = [
   "#22b8e6", "#16a34a", "#f59e0b", "#ef4444",
@@ -13,10 +14,12 @@ const inputCls =
 
 export default function CategoryFormModal({ open, onClose, initial, onSaved }) {
   const { categories, addCategory, updateCategory } = useAdmin();
+  const { toast } = useToast();
   const isEdit = Boolean(initial?.id);
   const [name, setName] = useState("");
   const [color, setColor] = useState(SWATCHES[0]);
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -28,7 +31,7 @@ export default function CategoryFormModal({ open, onClose, initial, onSaved }) {
     }
   }, [open, initial]);
 
-  function submit(e) {
+  async function submit(e) {
     e.preventDefault();
     if (!name.trim()) return setError("Required");
     const clash = categories.find(
@@ -36,10 +39,17 @@ export default function CategoryFormModal({ open, onClose, initial, onSaved }) {
     );
     if (clash) return setError("A category with this name already exists");
 
-    if (isEdit) updateCategory(initial.id, { name: name.trim(), color });
-    else addCategory({ name: name.trim(), color });
-    onSaved?.(isEdit);
-    onClose();
+    setSaving(true);
+    try {
+      if (isEdit) await updateCategory(initial.id, { name: name.trim(), color });
+      else await addCategory({ name: name.trim(), color });
+      onSaved?.(isEdit);
+      onClose();
+    } catch (err) {
+      toast(err.message || "Failed to save category.", "error");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -76,8 +86,10 @@ export default function CategoryFormModal({ open, onClose, initial, onSaved }) {
         </div>
 
         <div className="flex justify-end gap-3 pt-2">
-          <Button type="button" variant="subtle" onClick={onClose}>Cancel</Button>
-          <Button type="submit">{isEdit ? "Save Changes" : "Add Category"}</Button>
+          <Button type="button" variant="subtle" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button type="submit" disabled={saving}>
+            {saving ? "Saving…" : isEdit ? "Save Changes" : "Add Category"}
+          </Button>
         </div>
       </form>
     </Modal>

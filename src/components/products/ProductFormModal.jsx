@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import Modal from "../ui/Modal";
 import { Button } from "../ui/Primitives";
 import { useInventory } from "../../context/InventoryContext";
+import { useToast } from "../ui/Toast";
 
 const EMPTY = {
   name: "",
-  category: "split",
-  branchId: "north",
+  category: "",
+  branchId: "",
   stock: 0,
+  lowStockThreshold: 10,
 };
 
 function Field({ label, children }) {
@@ -33,9 +35,11 @@ export default function ProductFormModal({
   onSaved,
 }) {
   const { categories, branches, addProduct, updateProduct } = useInventory();
+  const { toast } = useToast();
   const isEdit = Boolean(initial?.id);
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     // Sync the form to the selected product whenever the modal (re)opens.
@@ -46,8 +50,8 @@ export default function ProductFormModal({
           ? { ...EMPTY, ...initial }
           : {
               ...EMPTY,
-              branchId: lockBranch || branches[0]?.id || "north",
-              category: categories[0]?.id || EMPTY.category,
+              branchId: lockBranch || branches[0]?.id || "",
+              category: categories[0]?.id || "",
             }
       );
       setErrors({});
@@ -59,11 +63,14 @@ export default function ProductFormModal({
     setForm((f) => ({ ...f, [k]: v }));
   }
 
-  function submit(e) {
+  async function submit(e) {
     e.preventDefault();
     const errs = {};
     if (!form.name.trim()) errs.name = "Required";
+    if (!form.category) errs.category = "Required";
+    if (!form.branchId) errs.branchId = "Required";
     if (Number(form.stock) < 0) errs.stock = "Invalid";
+    if (Number(form.lowStockThreshold) < 0) errs.lowStockThreshold = "Invalid";
     if (Object.keys(errs).length) return setErrors(errs);
 
     const cat = categories.find((c) => c.id === form.category);
@@ -75,10 +82,17 @@ export default function ProductFormModal({
     // A barcode scanned in Check-In ("Add Product Manually") keeps the new
     // product matchable by that code.
     if (!isEdit && scanCode) payload.barcode = String(scanCode).trim();
-    if (isEdit) updateProduct(initial.id, payload);
-    else addProduct(payload);
-    onSaved?.(isEdit);
-    onClose();
+    setSaving(true);
+    try {
+      if (isEdit) await updateProduct(initial.id, payload);
+      else await addProduct(payload);
+      onSaved?.(isEdit);
+      onClose();
+    } catch (err) {
+      toast(err.message || "Failed to save product.", "error");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -108,12 +122,16 @@ export default function ProductFormModal({
               value={form.category}
               onChange={(e) => set("category", e.target.value)}
             >
+              <option value="">— Select —</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
               ))}
             </select>
+            {errors.category && (
+              <span className="text-xs text-red-500">{errors.category}</span>
+            )}
           </Field>
           <Field label="Branch">
             <select
@@ -122,33 +140,57 @@ export default function ProductFormModal({
               disabled={Boolean(lockBranch)}
               onChange={(e) => set("branchId", e.target.value)}
             >
+              <option value="">— Select —</option>
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name} · {b.location}
                 </option>
               ))}
             </select>
+            {errors.branchId && (
+              <span className="text-xs text-red-500">{errors.branchId}</span>
+            )}
           </Field>
         </div>
 
-        <Field label="Stock Quantity">
-          <input
-            type="number"
-            min="0"
-            className={inputCls}
-            value={form.stock}
-            onChange={(e) => set("stock", e.target.value)}
-          />
-          {errors.stock && (
-            <span className="text-xs text-red-500">{errors.stock}</span>
-          )}
-        </Field>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Stock Quantity">
+            <input
+              type="number"
+              min="0"
+              className={inputCls}
+              value={form.stock}
+              onChange={(e) => set("stock", e.target.value)}
+            />
+            {errors.stock && (
+              <span className="text-xs text-red-500">{errors.stock}</span>
+            )}
+          </Field>
+          <Field label="Low Stock Threshold">
+            <input
+              type="number"
+              min="0"
+              className={inputCls}
+              value={form.lowStockThreshold}
+              onChange={(e) => set("lowStockThreshold", e.target.value)}
+              placeholder="10"
+            />
+            {errors.lowStockThreshold && (
+              <span className="text-xs text-red-500">{errors.lowStockThreshold}</span>
+            )}
+            <span className="mt-1 block text-xs text-slate-400">
+              Flag the product as “Low Stock” at or below this quantity.
+            </span>
+          </Field>
+        </div>
 
         <div className="flex justify-end gap-3 pt-2">
-          <Button type="button" variant="subtle" onClick={onClose}>
+          <Button type="button" variant="subtle" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button type="submit">{isEdit ? "Save Changes" : "Add Product"}</Button>
+          <Button type="submit" disabled={saving}>
+            {saving ? "Saving…" : isEdit ? "Save Changes" : "Add Product"}
+          </Button>
         </div>
       </form>
     </Modal>

@@ -16,13 +16,16 @@ import {
 import { Card, Button, Badge } from "../ui/Primitives";
 import { useInventory } from "../../context/InventoryContext";
 import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../ui/Toast";
 import { fmtDateTime, num } from "../../utils/format";
 
 // Shows scanned product + branch info and Check In / Check Out / History actions.
 export default function ProductResult({ product, onDone, onViewHistory }) {
   const { branches, recordMovement } = useInventory();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [qty, setQty] = useState(1);
+  const [busy, setBusy] = useState(false);
   const branch = branches.find((b) => b.id === product.branchId);
 
   const lowState =
@@ -32,15 +35,22 @@ export default function ProductResult({ product, onDone, onViewHistory }) {
       ? { tone: "amber", label: "Low Stock" }
       : { tone: "green", label: "In Stock" };
 
-  function move(type) {
-    const invoiceNo = recordMovement({
-      productId: product.id,
-      type,
-      quantity: qty,
-      actor: user.name,
-      branchName: branch?.name,
-    });
-    onDone?.(type, qty, invoiceNo);
+  async function move(type) {
+    setBusy(true);
+    try {
+      const invoiceNo = await recordMovement({
+        productId: product.id,
+        type,
+        quantity: qty,
+        actor: user.name,
+        branchName: branch?.name,
+      });
+      onDone?.(type, qty, invoiceNo);
+    } catch (e) {
+      toast(e.message || "Failed to record movement.", "error");
+    } finally {
+      setBusy(false);
+    }
   }
 
   const fields = [
@@ -142,14 +152,14 @@ export default function ProductResult({ product, onDone, onViewHistory }) {
 
           {/* Actions */}
           <div className="mt-5 grid grid-cols-2 gap-3">
-            <Button size="lg" onClick={() => move("in")} className="w-full">
+            <Button size="lg" onClick={() => move("in")} disabled={busy} className="w-full">
               <ArrowDownLeft className="h-4 w-4" /> Check In
             </Button>
             <Button
               size="lg"
               variant="danger"
               onClick={() => move("out")}
-              disabled={product.stock === 0}
+              disabled={busy || product.stock === 0}
               className="w-full"
             >
               <ArrowUpRight className="h-4 w-4" /> Check Out

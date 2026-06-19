@@ -78,34 +78,42 @@ export default function ScanInOut() {
     reset();
   }
 
-  function completeCheckIn() {
-    const inv = recordMovement({
-      productId: product.id,
-      type: "in",
-      quantity: qty,
-      actor: user.name,
-      branchName: branches.find((b) => b.id === product.branchId)?.name,
-    });
-    toast(`Checked in ${qty} × ${product.name}`, "success");
-    setReceipt({ type: "in", qty, invoiceNo: inv, name: product.name });
-    setScanned(null);
-    setProduct(null);
+  async function completeCheckIn() {
+    try {
+      const inv = await recordMovement({
+        productId: product.id,
+        type: "in",
+        quantity: qty,
+        actor: user.name,
+        branchName: branches.find((b) => b.id === product.branchId)?.name,
+      });
+      toast(`Checked in ${qty} × ${product.name}`, "success");
+      setReceipt({ type: "in", qty, invoiceNo: inv, name: product.name });
+      setScanned(null);
+      setProduct(null);
+    } catch (e) {
+      toast(e.message || "Failed to check in.", "error");
+    }
   }
 
-  function completeCheckOut() {
-    const inv = recordMovement({
-      productId: product.id,
-      type: "out",
-      quantity: qty,
-      actor: user.name,
-      branchName: branches.find((b) => b.id === product.branchId)?.name,
-      invoiceNo,
-    });
-    toast(`Checked out ${qty} × ${product.name}`, "success");
-    setReceipt({ type: "out", qty, invoiceNo: inv, name: product.name });
-    setScanned(null);
-    setProduct(null);
-    setConfirming(false);
+  async function completeCheckOut() {
+    try {
+      const inv = await recordMovement({
+        productId: product.id,
+        type: "out",
+        quantity: qty,
+        actor: user.name,
+        branchName: branches.find((b) => b.id === product.branchId)?.name,
+        invoiceNo,
+      });
+      toast(`Checked out ${qty} × ${product.name}`, "success");
+      setReceipt({ type: "out", qty, invoiceNo: inv, name: product.name });
+      setScanned(null);
+      setProduct(null);
+      setConfirming(false);
+    } catch (e) {
+      toast(e.message || "Failed to check out.", "error");
+    }
   }
 
   function afterManualAdd() {

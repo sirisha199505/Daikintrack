@@ -1,26 +1,157 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useMemo, useCallback } from "react";
-import { PRODUCTS, TRANSACTIONS } from "../data/seed";
-import { usePersistentState } from "../hooks/usePersistentState";
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 import { useAdmin } from "./AdminContext";
+import { useAuth } from "./AuthContext";
+import { Api } from "../lib/api";
 
 const InventoryContext = createContext(null);
 
 export function InventoryProvider({ children }) {
-  // Branches & categories are owned (and editable) by the Admin module.
+  const { user } = useAuth();
+  // Branches & categories are owned (and editable) by the Admin module. We use
+  // them to translate between the frontend's slug keys and the backend's ids.
   const { branches, categories } = useAdmin();
-  const [products, setProducts] = usePersistentState(
-    "daikin.inventory.products.v3",
-    PRODUCTS
+
+  // Raw API rows are kept as-is and mapped lazily, so a product/transaction list
+  // that loads before branches/categories still resolves once those arrive.
+  const [rawProducts, setRawProducts] = useState([]);
+  const [rawTransactions, setRawTransactions] = useState([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [productsError, setProductsError] = useState(null);
+
+  // ---- slug <-> backend id helpers (authoritative: the loaded admin lists) ----
+  const branchSlug = useCallback(
+    (apiId) => branches.find((b) => b.apiId === apiId)?.id ?? null,
+    [branches]
   );
-  const [transactions, setTransactions] = usePersistentState(
-    "daikin.inventory.transactions.v3",
-    TRANSACTIONS
+  const branchApiId = useCallback(
+    (slug) => branches.find((b) => b.id === slug)?.apiId ?? null,
+    [branches]
+  );
+  const catSlug = useCallback(
+    (apiId) => categories.find((c) => c.apiId === apiId)?.id ?? null,
+    [categories]
+  );
+  const catApiId = useCallback(
+    (slug) => categories.find((c) => c.id === slug)?.apiId ?? null,
+    [categories]
   );
 
+  const mapProductFromApi = useCallback(
+    (p) => {
+      if (!p) return null;
+      return {
+        id: p.id, // backend integer id (used for update/delete and as React key)
+        name: p.name,
+        branchId: branchSlug(p.branch_id),
+        branchName: p.branch_name,
+        category: catSlug(p.category_id),
+        categoryName: p.category_name,
+        stock: p.stock ?? 0,
+        lowStockThreshold: p.low_stock_threshold ?? 10,
+        price: p.price ?? 0, // whole rupees
+        barcode: p.barcode,
+        updatedAt: p.updated_at,
+      };
+    },
+    [branchSlug, catSlug]
+  );
+
+  const mapProductToApi = useCallback(
+    (form) => {
+      const payload = {
+        name: (form.name || "").trim(),
+        branch_id: form.branchId ? branchApiId(form.branchId) : null,
+        category_id: form.category ? catApiId(form.category) : null,
+        stock: Number(form.stock) || 0,
+        low_stock_threshold:
+          form.lowStockThreshold != null ? Number(form.lowStockThreshold) : 10,
+        price: Number(form.price) || 0,
+      };
+      if (form.barcode) payload.barcode = String(form.barcode).trim();
+      return payload;
+    },
+    [branchApiId, catApiId]
+  );
+
+  const mapTxnFromApi = useCallback(
+    (t) => {
+      if (!t) return null;
+      return {
+        id: t.id,
+        invoiceNo: t.invoice_no,
+        type: t.txn_type,
+        date: t.occurred_at || t.created_at,
+        branchId: branchSlug(t.branch_id),
+        branchName: t.branch_name,
+        productId: t.product_id,
+        productName: t.product_name,
+        barcode: t.barcode,
+        category: t.category,
+        quantity: t.quantity,
+        actor: t.actor,
+        status: t.status,
+      };
+    },
+    [branchSlug]
+  );
+
+  // Derived (mapped) views — re-map whenever branches/categories change so slugs
+  // resolve correctly even if the admin lists arrived after the inventory lists.
+  const products = useMemo(
+    () => rawProducts.map(mapProductFromApi),
+    [rawProducts, mapProductFromApi]
+  );
+  const transactions = useMemo(
+    () => rawTransactions.map(mapTxnFromApi),
+    [rawTransactions, mapTxnFromApi]
+  );
+
+  // ---- Loaders -------------------------------------------------------------
+  const refreshProducts = useCallback(async () => {
+    if (!user) {
+      setRawProducts([]);
+      return;
+    }
+    setProductsLoading(true);
+    setProductsError(null);
+    try {
+      setRawProducts(await Api.listProducts());
+    } catch (e) {
+      console.error("Failed to load products:", e);
+      setProductsError(e.message || "Failed to load products.");
+    } finally {
+      setProductsLoading(false);
+    }
+  }, [user]);
+
+  const refreshTransactions = useCallback(async () => {
+    if (!user) {
+      setRawTransactions([]);
+      return;
+    }
+    try {
+      setRawTransactions(await Api.listTransactions());
+    } catch (e) {
+      console.error("Failed to load transactions:", e);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    refreshProducts();
+    refreshTransactions();
+  }, [refreshProducts, refreshTransactions]);
+
+  // ---- Reads (over loaded state) ------------------------------------------
   const findByBarcode = useCallback(
-    (code) =>
-      products.find((p) => p.barcode === String(code).trim()) || null,
+    (code) => products.find((p) => p.barcode === String(code).trim()) || null,
     [products]
   );
 
@@ -29,85 +160,48 @@ export function InventoryProvider({ children }) {
     [products]
   );
 
-  // Record a check-in / check-out movement and adjust stock.
-  // An explicit invoiceNo (e.g. entered during check-out) is used when given,
-  // otherwise the next sequential invoice number is generated.
+  // ---- Mutations (server-backed) ------------------------------------------
+  // Record a check-in / check-out. The backend adjusts the product's stock
+  // atomically, so we refresh products afterwards and prepend the new movement.
   const recordMovement = useCallback(
-    ({ productId, type, quantity, actor, branchName, invoiceNo: invoiceArg }) => {
-      const qty = Math.max(1, Number(quantity) || 1);
-      let invoiceNo = "";
-      setProducts((prev) =>
-        prev.map((p) => {
-          if (p.id !== productId) return p;
-          const next =
-            type === "in"
-              ? p.stock + qty
-              : Math.max(0, p.stock - qty);
-          return { ...p, stock: next, updatedAt: new Date().toISOString() };
-        })
-      );
-      setTransactions((prev) => {
-        const product = products.find((p) => p.id === productId);
-        const branch = branches.find((b) => b.id === product?.branchId);
-        const seq = 4900 + prev.length + 1;
-        invoiceNo = (invoiceArg && String(invoiceArg).trim()) || `INV-2026-${seq}`;
-        const txn = {
-          id: `txn-${Date.now()}`,
-          invoiceNo,
-          type,
-          date: new Date().toISOString(),
-          branchId: product?.branchId,
-          branchName: branchName || branch?.name || "—",
-          productId,
-          productName: product?.name,
-          barcode: product?.barcode,
-          category: product?.categoryName,
-          quantity: qty,
-          actor: actor || "—",
-          status: type === "in" ? "Checked In" : "Checked Out",
-        };
-        return [txn, ...prev];
+    async ({ productId, type, quantity, actor, branchName, invoiceNo }) => {
+      const created = await Api.createTransaction({
+        product_id: productId,
+        type,
+        quantity: Math.max(1, Number(quantity) || 1),
+        invoice_no: invoiceNo || undefined,
+        actor: actor || undefined,
+        branch_name: branchName || undefined,
       });
-      return invoiceNo;
+      setRawTransactions((prev) => [created, ...prev]);
+      await refreshProducts(); // stock changed server-side
+      return created.invoice_no;
     },
-    [products, branches, setProducts, setTransactions]
+    [refreshProducts]
   );
 
-  const addProduct = useCallback((data) => {
-    setProducts((prev) => {
-      const base = {
-        id: `p-${Date.now()}`,
-        lowStockThreshold: 10,
-        price: 0,
-        stock: 0,
-        updatedAt: new Date().toISOString(),
-        ...data,
-      };
-      // Barcode is no longer entered manually — auto-generate one so the
-      // product stays scannable.
-      if (!base.barcode) {
-        const tail = String(Date.now()).slice(-9);
-        base.barcode = `890${tail}0`.slice(0, 13).padEnd(13, "0");
-      }
-      return [base, ...prev];
-    });
-  }, [setProducts]);
+  const addProduct = useCallback(
+    async (data) => {
+      const created = await Api.createProduct(mapProductToApi(data));
+      setRawProducts((prev) => [created, ...prev]);
+    },
+    [mapProductToApi]
+  );
 
-  const updateProduct = useCallback((id, data) => {
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === id
-          ? { ...p, ...data, updatedAt: new Date().toISOString() }
-          : p
-      )
-    );
-  }, [setProducts]);
+  const updateProduct = useCallback(
+    async (id, data) => {
+      const updated = await Api.updateProduct(id, mapProductToApi(data));
+      setRawProducts((prev) => prev.map((p) => (p.id === id ? updated : p)));
+    },
+    [mapProductToApi]
+  );
 
-  const deleteProduct = useCallback((id) => {
-    setProducts((prev) => prev.filter((p) => p.id !== id));
-  }, [setProducts]);
+  const deleteProduct = useCallback(async (id) => {
+    await Api.deleteProduct(id);
+    setRawProducts((prev) => prev.filter((p) => p.id !== id));
+  }, []);
 
-  // Aggregate stats, optionally scoped to a branch.
+  // ---- Aggregates ----------------------------------------------------------
   const statsFor = useCallback(
     (branchId = null) => {
       const scope = branchId
@@ -140,20 +234,26 @@ export function InventoryProvider({ children }) {
       const scope = branchId
         ? products.filter((p) => p.branchId === branchId)
         : products;
-      return categories.map((c) => {
-        const items = scope.filter((p) => p.category === c.id);
-        const value = items.reduce((s, p) => s + p.stock, 0);
-        const lowCount = items.filter(
-          (p) => p.stock > 0 && p.stock <= p.lowStockThreshold
-        ).length;
-        const outCount = items.filter((p) => p.stock === 0).length;
-        return { ...c, value, lowCount, outCount, low: lowCount > 0 };
-      }).filter((c) => c.value >= 0);
+      return categories
+        .map((c) => {
+          const items = scope.filter((p) => p.category === c.id);
+          const value = items.reduce((s, p) => s + p.stock, 0);
+          const lowItems = items.filter(
+            (p) => p.stock > 0 && p.stock <= p.lowStockThreshold
+          );
+          const lowCount = lowItems.length;
+          // Units (stock quantity) tied up in low-stock products for this category.
+          const lowValue = lowItems.reduce((s, p) => s + p.stock, 0);
+          const outCount = items.filter((p) => p.stock === 0).length;
+          return { ...c, value, lowCount, lowValue, outCount, low: lowCount > 0 };
+        })
+        .filter((c) => c.value >= 0);
     },
     [products, categories]
   );
 
-  // Suggested next invoice number for a check-out.
+  // Suggested next invoice number for a check-out (the backend assigns the real
+  // one when none is supplied; this is just a friendly default in the form).
   const nextInvoiceNo = useCallback(
     () => `INV-2026-${4900 + transactions.length + 1}`,
     [transactions]
@@ -165,6 +265,10 @@ export function InventoryProvider({ children }) {
       transactions,
       branches,
       categories,
+      productsLoading,
+      productsError,
+      refreshProducts,
+      refreshTransactions,
       findByBarcode,
       getProduct,
       recordMovement,
@@ -180,6 +284,10 @@ export function InventoryProvider({ children }) {
       transactions,
       branches,
       categories,
+      productsLoading,
+      productsError,
+      refreshProducts,
+      refreshTransactions,
       findByBarcode,
       getProduct,
       recordMovement,

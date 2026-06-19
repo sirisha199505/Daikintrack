@@ -27,10 +27,14 @@ export default function CategoryManagement() {
     return map;
   }, [products]);
 
-  function confirmDelete() {
-    deleteCategory(toDelete.id);
-    toast(`Deleted ${toDelete.name}`, "info");
-    setToDelete(null);
+  async function confirmDelete() {
+    try {
+      await deleteCategory(toDelete.id);
+      toast(`Deleted ${toDelete.name}`, "info");
+      setToDelete(null);
+    } catch (e) {
+      toast(e.message || "Failed to delete category.", "error");
+    }
   }
 
   if (loading) {

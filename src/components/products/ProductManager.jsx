@@ -77,10 +77,14 @@ export default function ProductManager({ branchId = null, title, subtitle }) {
 
   const branchName = (id) => branches.find((b) => b.id === id)?.name || "—";
 
-  function confirmDelete() {
-    deleteProduct(toDelete.id);
-    toast(`Deleted ${toDelete.name}`, "info");
-    setToDelete(null);
+  async function confirmDelete() {
+    try {
+      await deleteProduct(toDelete.id);
+      toast(`Deleted ${toDelete.name}`, "info");
+      setToDelete(null);
+    } catch (e) {
+      toast(e.message || "Failed to delete product.", "error");
+    }
   }
 
   if (loading) {

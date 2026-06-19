@@ -215,6 +215,28 @@ export function mapBranchToApi(form) {
   return payload;
 }
 
+// ---- Category mappers ----------------------------------------------------
+// Like branches, categories are keyed by slug across the frontend (product.category
+// is a slug). `apiId` carries the backend integer key for update/delete.
+export function mapCategoryFromApi(c) {
+  if (!c) return null;
+  return {
+    apiId: c.id,
+    id: c.slug,
+    slug: c.slug,
+    name: c.name,
+    color: c.color || null,
+  };
+}
+
+export function mapCategoryToApi(form) {
+  const payload = { name: (form.name || "").trim(), active: true };
+  if (form.color) payload.color = form.color;
+  const slug = form.slug || form.id;
+  if (slug) payload.slug = slug;
+  return payload;
+}
+
 // ---- Endpoints -----------------------------------------------------------
 export const Api = {
   async login(username, password) {
@@ -268,5 +290,49 @@ export const Api = {
 
   async deleteBranch(apiId) {
     await apiRequest(`/branches/${apiId}`, { method: "DELETE" });
+  },
+
+  // ---- Categories (server-backed) ----
+  async listCategories() {
+    const res = await apiRequest("/categories");
+    return res.data || [];
+  },
+  async createCategory(payload) {
+    const res = await apiRequest("/categories", { method: "POST", body: payload });
+    return res.data;
+  },
+  async updateCategory(apiId, payload) {
+    const res = await apiRequest(`/categories/${apiId}`, { method: "PUT", body: payload });
+    return res.data;
+  },
+  async deleteCategory(apiId) {
+    await apiRequest(`/categories/${apiId}`, { method: "DELETE" });
+  },
+
+  // ---- Products (server-backed). Prices are whole rupees. ----
+  async listProducts() {
+    const res = await apiRequest("/products?page_size=300");
+    return res.data || [];
+  },
+  async createProduct(payload) {
+    const res = await apiRequest("/products", { method: "POST", body: payload });
+    return res.data;
+  },
+  async updateProduct(id, payload) {
+    const res = await apiRequest(`/products/${id}`, { method: "PUT", body: payload });
+    return res.data;
+  },
+  async deleteProduct(id) {
+    await apiRequest(`/products/${id}`, { method: "DELETE" });
+  },
+
+  // ---- Transactions (server-backed; create adjusts stock atomically) ----
+  async listTransactions() {
+    const res = await apiRequest("/transactions?page_size=300");
+    return res.data || [];
+  },
+  async createTransaction(payload) {
+    const res = await apiRequest("/transactions", { method: "POST", body: payload });
+    return res.data;
   },
 };
