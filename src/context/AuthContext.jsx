@@ -44,7 +44,12 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let cancelled = false;
     async function restore() {
-      if (!getToken()) return;
+      // No token means there is no live session — clear any stale cached user
+      // so the UI never presents a tokenless cache as a logged-in admin.
+      if (!getToken()) {
+        if (!cancelled) setUser(null);
+        return;
+      }
       try {
         await ensureBranchMap();
         const info = await Api.me();

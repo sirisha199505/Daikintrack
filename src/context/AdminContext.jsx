@@ -39,6 +39,7 @@ export function AdminProvider({ children }) {
   // ---- Users: backed by the API (synced across all devices) ----
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState(null);
 
   // ---- Branches & categories: still local (seed) for now ----
   const [branches, setBranches] = usePersistentState("daikin.admin.branches", BRANCHES);
@@ -50,12 +51,14 @@ export function AdminProvider({ children }) {
       return;
     }
     setUsersLoading(true);
+    setUsersError(null);
     try {
       await ensureBranchMap();
       const list = await Api.listUsers();
       setUsers(list.map(mapUserFromApi));
     } catch (e) {
       console.error("Failed to load users:", e);
+      setUsersError(e.message || "Failed to load users.");
     } finally {
       setUsersLoading(false);
     }
@@ -126,6 +129,7 @@ export function AdminProvider({ children }) {
     () => ({
       users,
       usersLoading,
+      usersError,
       refreshUsers,
       branches,
       categories,
@@ -143,6 +147,7 @@ export function AdminProvider({ children }) {
     [
       users,
       usersLoading,
+      usersError,
       refreshUsers,
       branches,
       categories,
