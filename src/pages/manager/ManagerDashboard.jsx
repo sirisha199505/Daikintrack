@@ -102,6 +102,7 @@ export default function ManagerDashboard() {
                 data={inStockData}
                 centerValue={num(stats.totalStock)}
                 centerLabel="in stock"
+                showTooltip
               />
             </div>
           ) : (

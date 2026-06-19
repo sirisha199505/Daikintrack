@@ -195,6 +195,7 @@ const StockOverview = memo(function StockOverview({
               centerValue={num(totalStock)}
               centerLabel="in stock"
               unit="units"
+              showTooltip
             />
           </div>
         ) : (

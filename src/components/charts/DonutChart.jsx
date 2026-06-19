@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { shade } from "../../utils/color";
 
 // Circular stock chart with a 3D look (glossy gradient slices + drop shadow).
@@ -10,7 +10,9 @@ export default function DonutChart({
   innerRadius = "62%",
   centerValue,
   centerLabel = "units",
+  unit = "units",
   showLegend = false,
+  showTooltip = false,
   light = false,
 }) {
   const uid = useId().replace(/:/g, "");
@@ -49,6 +51,18 @@ export default function DonutChart({
               <Cell key={i} fill={`url(#grad-${uid}-${i})`} />
             ))}
           </Pie>
+          {showTooltip && (
+            <Tooltip
+              formatter={(v, n) => [`${v} ${unit}`, n]}
+              contentStyle={{
+                borderRadius: 10,
+                border: "1px solid #e2e8f0",
+                boxShadow: "0 8px 24px rgba(16,24,40,.12)",
+                fontSize: 12,
+                padding: "4px 10px",
+              }}
+            />
+          )}
           {showLegend && <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" />}
         </PieChart>
       </ResponsiveContainer>
