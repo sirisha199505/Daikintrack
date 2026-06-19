@@ -17,14 +17,17 @@ export default function AppLayout() {
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
 
   const userRole = roleLabel(user.role);
-  // Store managers can view another branch read-only. The "active" branch is the
-  // one they've switched to, or their own assigned branch by default.
+  // Only store managers can switch branch — they view another branch read-only.
+  // The "active" branch is the one they've switched to, or their own by default.
   const canSwitchBranch = user.role === "store_manager" && branches.length > 0;
   const activeBranchId = viewBranchId || user.branchId;
 
   function selectBranch(slug) {
-    // Switching back to their own branch clears the override (default scope).
-    setViewBranchId(slug === user.branchId ? null : slug);
+    setViewBranchId((cur) => {
+      if (slug === user.branchId) return null; // manager: back to own branch
+      if (slug === cur) return null; // tapping the active branch clears it
+      return slug;
+    });
     setBranchMenuOpen(false);
     setProfileOpen(false);
   }

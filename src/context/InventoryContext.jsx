@@ -125,11 +125,14 @@ export function InventoryProvider({ children }) {
     [rawTransactions, mapTxnFromApi]
   );
 
-  // Backend branch_id to scope reads to when a manager is viewing another branch
-  // (null = default scope: own branch for managers, everything for distributors).
+  // Backend branch_id to scope reads to. Only store managers re-fetch scoped (so
+  // they can view another branch read-only). Distributors always load every
+  // branch — their "Switch Branch" only focuses the dashboard client-side, so
+  // scoping the fetch would wrongly shrink their all-branches overview.
   const viewBranchApiId = useMemo(
-    () => (viewBranchId ? branchApiId(viewBranchId) : null),
-    [viewBranchId, branchApiId]
+    () =>
+      user?.role === "store_manager" && viewBranchId ? branchApiId(viewBranchId) : null,
+    [user?.role, viewBranchId, branchApiId]
   );
 
   // ---- Loaders -------------------------------------------------------------
