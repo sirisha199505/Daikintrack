@@ -176,13 +176,14 @@ export default function AppLayout() {
 
         {/* Content */}
         <main className="flex flex-1 flex-col overflow-y-auto">
-          <div className="mx-auto w-full max-w-7xl flex-1 p-4 sm:p-6">
+          <div className="mx-auto w-full max-w-7xl flex-1 p-4 pb-24 sm:p-6 lg:pb-6">
             <Outlet />
           </div>
-          {/* Bottom tab bar — the sole navigation for every role */}
-          <BottomNav />
         </main>
       </div>
+
+      {/* Mobile bottom tab bar — fixed to the viewport, never scrolls away */}
+      <BottomNav />
     </div>
   );
 }

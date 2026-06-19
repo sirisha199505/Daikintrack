@@ -21,6 +21,26 @@ export default function WarehouseStackChart({
   height = 360,
 }) {
   const uid = useId().replace(/:/g, "");
+  // Angled, truncated branch names — readable and non-overlapping even when the
+  // chart is narrow (mobile) with several branches.
+  const renderTick = ({ x, y, payload }) => {
+    const label = String(payload.value);
+    const text = label.length > 12 ? `${label.slice(0, 11)}…` : label;
+    return (
+      <text
+        x={x}
+        y={y + 8}
+        transform={`rotate(-35, ${x}, ${y + 8})`}
+        textAnchor="end"
+        fontSize={10}
+        fontWeight={600}
+        fill="#475569"
+      >
+        {text}
+      </text>
+    );
+  };
+
   // Hide labels for small segments so the bars stay readable.
   const renderLabel = (props) => {
     const { x, y, width, height: h, value } = props;
@@ -40,16 +60,10 @@ export default function WarehouseStackChart({
     );
   };
 
-  // Give every bar a minimum slot so labels/axis ticks never collide. When the
-  // branch count outgrows the card width the chart scrolls horizontally
-  // (important on mobile, where many branches would otherwise be squashed).
-  const minWidth = Math.max(rows.length * 90, 280);
-
   return (
-    <div className="w-full overflow-x-auto no-scrollbar" style={{ WebkitOverflowScrolling: "touch" }}>
-      <div style={{ height, minWidth }}>
+    <div style={{ height }} className="w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={rows} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+        <BarChart data={rows} margin={{ top: 8, right: 8, left: -8, bottom: 12 }}>
           <defs>
             <filter id={`wshadow-${uid}`} x="-20%" y="-20%" width="140%" height="140%">
               <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#0f172a" floodOpacity="0.22" />
@@ -65,7 +79,9 @@ export default function WarehouseStackChart({
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef2f7" />
           <XAxis
             dataKey="name"
-            tick={{ fontSize: 12, fill: "#475569", fontWeight: 600 }}
+            tick={renderTick}
+            interval={0}
+            height={52}
             axisLine={false}
             tickLine={false}
           />
@@ -96,7 +112,6 @@ export default function WarehouseStackChart({
           ))}
         </BarChart>
       </ResponsiveContainer>
-      </div>
     </div>
   );
 }

@@ -121,8 +121,8 @@ export default function AdminDashboard() {
         lowStackCats={lowStackCats}
       />
 
-      {/* Hub tabs — single straight line; scrolls horizontally if they overflow */}
-      <div className="flex gap-2 overflow-x-auto no-scrollbar">
+      {/* Hub tabs — small pills that wrap to fit; never scroll sideways */}
+      <div className="flex flex-wrap gap-1.5">
         {branches.map((b, i) => {
           const active = index === i;
           return (
@@ -134,14 +134,14 @@ export default function AdminDashboard() {
                   ? { background: b.color, boxShadow: `0 8px 20px ${b.color}55` }
                   : undefined
               }
-              className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition cursor-pointer sm:text-sm ${
+              className={`relative flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold transition cursor-pointer ${
                 active
                   ? "text-white"
                   : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
               }`}
             >
               <span
-                className="h-2 w-2 shrink-0 rounded-full"
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
                 style={{ background: active ? "#fff" : b.color }}
               />
               {b.name}
@@ -214,7 +214,7 @@ const StockOverview = memo(function StockOverview({
         </div>
         {lowStock > 0 ? (
           <div className="mt-2 flex flex-1 items-center">
-            <WarehouseStackChart rows={lowRows} categories={lowStackCats} height={260} />
+            <WarehouseStackChart rows={lowRows} categories={lowStackCats} height={220} />
           </div>
         ) : (
           <div className="grid flex-1 place-items-center">
