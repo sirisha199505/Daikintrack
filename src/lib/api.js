@@ -325,6 +325,18 @@ export const Api = {
   async deleteProduct(id) {
     await apiRequest(`/products/${id}`, { method: "DELETE" });
   },
+  // Look a product up by barcode across ALL branches (returns null if none).
+  async getProductByBarcode(code) {
+    try {
+      const res = await apiRequest(
+        `/products/by-barcode?barcode=${encodeURIComponent(String(code).trim())}`
+      );
+      return res.data;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }
+  },
 
   // ---- Transactions (server-backed; create adjusts stock atomically) ----
   async listTransactions() {

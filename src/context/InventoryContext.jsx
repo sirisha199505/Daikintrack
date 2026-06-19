@@ -160,6 +160,18 @@ export function InventoryProvider({ children }) {
     [products]
   );
 
+  // Look up a barcode across ALL branches (the loaded `products` list is
+  // branch-scoped for managers). Returns the mapped product or null.
+  const lookupByBarcode = useCallback(
+    async (code) => {
+      const local = findByBarcode(code);
+      if (local) return local;
+      const p = await Api.getProductByBarcode(code);
+      return p ? mapProductFromApi(p) : null;
+    },
+    [findByBarcode, mapProductFromApi]
+  );
+
   // ---- Mutations (server-backed) ------------------------------------------
   // Record a check-in / check-out. The backend adjusts the product's stock
   // atomically, so we refresh products afterwards and prepend the new movement.
@@ -270,6 +282,7 @@ export function InventoryProvider({ children }) {
       refreshProducts,
       refreshTransactions,
       findByBarcode,
+      lookupByBarcode,
       getProduct,
       recordMovement,
       addProduct,
@@ -289,6 +302,7 @@ export function InventoryProvider({ children }) {
       refreshProducts,
       refreshTransactions,
       findByBarcode,
+      lookupByBarcode,
       getProduct,
       recordMovement,
       addProduct,

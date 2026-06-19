@@ -31,7 +31,8 @@ const inputCls =
 
 export default function ScanInOut() {
   const { user } = useAuth();
-  const { findByBarcode, recordMovement, branches, nextInvoiceNo } = useInventory();
+  const { findByBarcode, lookupByBarcode, recordMovement, branches, nextInvoiceNo } =
+    useInventory();
   const { toast } = useToast();
   const [params] = useSearchParams();
 
@@ -39,6 +40,7 @@ export default function ScanInOut() {
   const [scanned, setScanned] = useState(null); // { code, type }
   const [product, setProduct] = useState(null);
   const [notFound, setNotFound] = useState("");
+  const [elsewhere, setElsewhere] = useState(null); // product that lives in another branch
   const [qty, setQty] = useState(1);
   const [invoiceNo, setInvoiceNo] = useState("");
   const [confirming, setConfirming] = useState(false);
@@ -47,18 +49,35 @@ export default function ScanInOut() {
 
   const locked = Boolean(scanned) || Boolean(receipt);
 
-  function onResult(code, type) {
+  async function onResult(code, type) {
     if (locked) return; // prevent multiple scans of the same transaction
     setScanned({ code, type });
+    // Product already in this branch → ready to check in/out.
     const found = findByBarcode(code);
     if (found) {
       setProduct(found);
       setNotFound("");
+      setElsewhere(null);
       setQty(1);
       // Pre-fill a suggested invoice number for check-out (still editable).
       if (op === "out") setInvoiceNo(nextInvoiceNo());
+      return;
+    }
+    // Not in this branch — check globally before offering to add, so we never
+    // try to create a product whose barcode already exists elsewhere.
+    let existing = null;
+    try {
+      existing = await lookupByBarcode(code);
+    } catch {
+      /* lookup failed — fall through to the add path */
+    }
+    if (existing) {
+      setElsewhere(existing);
+      setNotFound("");
+      setProduct(null);
     } else {
       setNotFound(code);
+      setElsewhere(null);
       setProduct(null);
     }
   }
@@ -67,6 +86,7 @@ export default function ScanInOut() {
     setScanned(null);
     setProduct(null);
     setNotFound("");
+    setElsewhere(null);
     setReceipt(null);
     setQty(1);
     setInvoiceNo("");
@@ -122,6 +142,7 @@ export default function ScanInOut() {
     if (found) {
       setProduct(found);
       setNotFound("");
+      setElsewhere(null);
       setQty(1);
       if (op === "out") setInvoiceNo(nextInvoiceNo());
     }
@@ -238,6 +259,21 @@ export default function ScanInOut() {
               onCheckIn={completeCheckIn}
               onCheckOut={completeCheckOut}
             />
+          ) : elsewhere ? (
+            <Card>
+              <EmptyState
+                icon={Building2}
+                title="Product in another branch"
+                subtitle={`"${elsewhere.name}" already exists in ${
+                  elsewhere.branchName || "another branch"
+                }. You can only manage stock for your own branch.`}
+                action={
+                  <Button variant="outline" onClick={reset}>
+                    <RotateCcw className="h-4 w-4" /> Scan again
+                  </Button>
+                }
+              />
+            </Card>
           ) : notFound ? (
             <Card>
               <EmptyState
