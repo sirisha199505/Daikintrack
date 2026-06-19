@@ -11,13 +11,9 @@ import {
   Loader2,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { Api } from "../lib/api";
 import logo from "/DAIKIN_logo.PNG";
 import warehouse from "/warehouse-bg.png";
-
-const STATS = [
-  { icon: Boxes, value: "4", label: "Warehouses" },
-  { icon: Activity, value: "Real-time", label: "Tracking" },
-];
 
 export default function Login() {
   const { login, user } = useAuth();
@@ -28,10 +24,31 @@ export default function Login() {
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [warehouseCount, setWarehouseCount] = useState(null);
 
   useEffect(() => {
     if (user) navigate("/app", { replace: true });
   }, [user, navigate]);
+
+  // Pull the live warehouse count so the marketing stat stays in sync with the DB.
+  useEffect(() => {
+    let cancelled = false;
+    Api.publicStats()
+      .then((s) => {
+        if (!cancelled && s.warehouses != null) setWarehouseCount(s.warehouses);
+      })
+      .catch(() => {
+        /* keep the placeholder if the count can't be fetched */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const stats = [
+    { icon: Boxes, value: warehouseCount == null ? "—" : String(warehouseCount), label: "Warehouses" },
+    { icon: Activity, value: "Real-time", label: "Tracking" },
+  ];
 
   async function submit(e) {
     e.preventDefault();
@@ -81,7 +98,7 @@ export default function Login() {
               Streamline operations. Track stock. Manage every hub in real time.
             </p>
             <div className="mt-6 flex flex-wrap gap-6 lg:mt-8 lg:gap-8">
-              {STATS.map((s) => (
+              {stats.map((s) => (
                 <div key={s.label}>
                   <div className="grid h-10 w-10 place-items-center rounded-full bg-white/10 ring-1 ring-white/20">
                     <s.icon className="h-5 w-5" />

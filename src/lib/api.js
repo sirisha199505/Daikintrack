@@ -239,6 +239,12 @@ export function mapCategoryToApi(form) {
 
 // ---- Endpoints -----------------------------------------------------------
 export const Api = {
+  // Public counts for the login screen (no auth required).
+  async publicStats() {
+    const res = await apiRequest("/stats", { auth: false });
+    return res.data || {};
+  },
+
   async login(username, password) {
     const res = await apiRequest("/login", {
       method: "POST",
