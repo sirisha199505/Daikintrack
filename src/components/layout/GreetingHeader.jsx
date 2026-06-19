@@ -35,7 +35,7 @@ export default function GreetingHeader({ name, subtitle, badge }) {
         {badge ? (
           badge
         ) : (
-          <div className="flex items-center gap-2 self-start rounded-lg bg-white/10 px-2.5 py-1 text-white/90 ring-1 ring-white/15">
+          <div className="hidden items-center gap-2 self-start rounded-lg bg-white/10 px-2.5 py-1 text-white/90 ring-1 ring-white/15 sm:flex">
             <span className="text-sm font-bold tabular-nums">{fmtTime(now)}</span>
             <span className="text-[10px] text-white/60">{dateStr}</span>
           </div>

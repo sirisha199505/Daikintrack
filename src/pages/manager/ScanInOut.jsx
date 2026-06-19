@@ -38,7 +38,6 @@ export default function ScanInOut() {
     branches,
     nextInvoiceNo,
     viewBranchId,
-    isViewingOtherBranch,
   } = useInventory();
   const { toast } = useToast();
   const [params] = useSearchParams();
@@ -156,33 +155,8 @@ export default function ScanInOut() {
   }
 
   const maxOut = product ? product.stock : 0;
-  const viewedBranch = branches.find((b) => b.id === viewBranchId);
-
-  // A manager viewing another branch is read-only: scanning would record against
-  // their own branch, so block it and point them back.
-  if (isViewingOtherBranch) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Check In / Check Out</h1>
-          <p className="text-sm text-slate-500">
-            Scan a QR code or barcode — the type is detected automatically.
-          </p>
-        </div>
-        <Card className="flex flex-col items-center gap-3 p-8 text-center">
-          <div className="grid h-12 w-12 place-items-center rounded-full bg-amber-50 text-amber-600">
-            <Lock className="h-6 w-6" />
-          </div>
-          <h2 className="text-lg font-bold text-slate-800">Read-only view</h2>
-          <p className="max-w-md text-sm text-slate-500">
-            You're viewing <strong>{viewedBranch?.name || "another branch"}</strong>. Stock
-            movements can only be recorded for your own branch. Switch back to your branch from the
-            profile menu to scan.
-          </p>
-        </Card>
-      </div>
-    );
-  }
+  // The branch the manager is operating on — their own, or one they switched to.
+  const activeBranchId = viewBranchId || user.branchId;
 
   return (
     <div className="space-y-6">
@@ -258,7 +232,7 @@ export default function ScanInOut() {
               </Button>
             </div>
           ) : (
-            <Scanner onResult={onResult} branchId={user.branchId} />
+            <Scanner onResult={onResult} branchId={activeBranchId} />
           )}
         </Card>
 
@@ -352,7 +326,7 @@ export default function ScanInOut() {
       <ProductFormModal
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        lockBranch={user.branchId}
+        lockBranch={activeBranchId}
         scanCode={scanned?.code}
         onSaved={() => {
           toast("Product added", "success");

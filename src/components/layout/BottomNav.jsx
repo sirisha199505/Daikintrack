@@ -10,7 +10,7 @@ export default function BottomNav() {
   const items = NAV[user.role] || [];
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 flex items-stretch border-t border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 lg:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-stretch border-t border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 lg:hidden">
       {items.map((item) => (
         <NavLink
           key={item.to}

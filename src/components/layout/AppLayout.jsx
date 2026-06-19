@@ -174,9 +174,10 @@ export default function AppLayout() {
           <Sidebar />
         </aside>
 
-        {/* Content */}
-        <main className="flex flex-1 flex-col overflow-y-auto">
-          <div className="mx-auto w-full max-w-7xl flex-1 p-4 pb-24 sm:p-6 lg:pb-6">
+        {/* Content — equal top/bottom space; pb-16 on mobile clears the fixed
+            h-16 bottom nav so the gap above it matches the gap below the header. */}
+        <main className="flex flex-1 flex-col overflow-y-auto pb-16 lg:pb-0">
+          <div className="mx-auto w-full max-w-7xl flex-1 p-4 sm:p-6">
             <Outlet />
           </div>
         </main>

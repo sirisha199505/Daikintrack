@@ -65,11 +65,11 @@ export default function ManagerDashboard() {
       />
 
       {isViewingOtherBranch && (
-        <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="flex items-center gap-2 rounded-xl border border-daikin-200 bg-daikin-50 px-4 py-3 text-sm text-daikin-800">
           <Eye className="h-4 w-4 shrink-0" />
           <span>
-            Viewing <strong>{viewedBranch?.name}</strong> in read-only mode. Switch back to your
-            branch from the profile menu to record stock movements.
+            You're managing <strong>{viewedBranch?.name}</strong>. Switch back to your own branch
+            from the profile menu any time.
           </span>
         </div>
       )}
@@ -143,16 +143,14 @@ export default function ManagerDashboard() {
         </Card>
       </div>
 
-      {!isViewingOtherBranch && (
-        <Card className="flex flex-col gap-3 p-5 sm:flex-row">
-          <Button size="lg" className="flex-1" onClick={() => navigate("/app/scan?op=in")}>
-            <ArrowDownLeft className="h-4 w-4" /> Check In
-          </Button>
-          <Button size="lg" variant="danger" className="flex-1" onClick={() => navigate("/app/scan?op=out")}>
-            <ArrowUpRight className="h-4 w-4" /> Check Out
-          </Button>
-        </Card>
-      )}
+      <Card className="flex flex-col gap-3 p-5 sm:flex-row">
+        <Button size="lg" className="flex-1" onClick={() => navigate("/app/scan?op=in")}>
+          <ArrowDownLeft className="h-4 w-4" /> Check In
+        </Button>
+        <Button size="lg" variant="danger" className="flex-1" onClick={() => navigate("/app/scan?op=out")}>
+          <ArrowUpRight className="h-4 w-4" /> Check Out
+        </Button>
+      </Card>
     </div>
   );
 }
