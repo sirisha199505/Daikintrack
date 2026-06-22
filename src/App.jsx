@@ -17,6 +17,10 @@ import ManageStock from "./pages/manager/ManageStock";
 import ManagerHistory from "./pages/manager/ManagerHistory";
 import RecentScans from "./pages/manager/RecentScans";
 
+import CopperScan from "./pages/copper/CopperScan";
+import CopperHistory from "./pages/copper/CopperHistory";
+import CopperDashboard from "./pages/copper/CopperDashboard";
+
 // Picks the right dashboard for the signed-in role.
 // Store Manager → operational dashboard; Distributor → system overview.
 // Admin has no dashboard — it lands on User Management instead.
@@ -106,6 +110,33 @@ export default function App() {
           element={
             <ProtectedRoute roles={["store_manager"]}>
               <ManageStock />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* CopperScan — capture for admin & store managers; analytics/history
+            readable by all three roles. */}
+        <Route
+          path="copper"
+          element={
+            <ProtectedRoute roles={["admin", "store_manager"]}>
+              <CopperScan />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="copper/history"
+          element={
+            <ProtectedRoute roles={["admin", "store_manager", "distributor"]}>
+              <CopperHistory />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="copper/analytics"
+          element={
+            <ProtectedRoute roles={["admin", "store_manager", "distributor"]}>
+              <CopperDashboard />
             </ProtectedRoute>
           }
         />

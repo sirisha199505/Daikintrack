@@ -215,6 +215,58 @@ export function mapBranchToApi(form) {
   return payload;
 }
 
+// ---- CopperScan mappers --------------------------------------------------
+// Backend rows reference branches by integer id; the frontend keys by slug.
+// `list`/`summary` use the lean projection (no base64 image); `get` returns the
+// full row including the image.
+export function mapCopperScanFromApi(s) {
+  if (!s) return null;
+  const { idToSlug } = branchMap();
+  return {
+    id: s.id,
+    branchId: s.branch_id != null ? idToSlug[s.branch_id] ?? s.branch_id : null,
+    branchName: s.branch_name,
+    referenceType: s.reference_type,
+    referenceMm: s.reference_mm,
+    pxPerMm: s.px_per_mm,
+    lengthM: s.length_m ?? 0,
+    gaugeSystem: s.gauge_system,
+    gaugeValue: s.gauge_value,
+    diameterMm: s.diameter_mm,
+    weightG: s.weight_g ?? 0,
+    weightKg: s.weight_kg ?? (s.weight_g ?? 0) / 1000,
+    image: s.image ?? null,
+    hasImage: s.has_image ?? Boolean(s.image),
+    points: s.points,
+    notes: s.notes,
+    actor: s.actor,
+    status: s.status,
+    createdAt: s.created_at,
+  };
+}
+
+export function mapCopperScanToApi(form) {
+  const { slugToId } = branchMap();
+  const branchId =
+    form.branchId != null
+      ? slugToId[form.branchId] ?? (Number.isFinite(+form.branchId) ? +form.branchId : null)
+      : null;
+  return {
+    branch_id: branchId,
+    reference_type: form.referenceType || "a4",
+    reference_mm: form.referenceMm,
+    px_per_mm: form.pxPerMm,
+    length_m: Number(form.lengthM) || 0,
+    gauge_system: form.gaugeSystem || "awg",
+    gauge_value: form.gaugeValue != null ? String(form.gaugeValue) : null,
+    diameter_mm: Number(form.diameterMm) || 0,
+    weight_g: Number(form.weightG) || 0,
+    image: form.image || null,
+    points: form.points ? JSON.stringify(form.points) : null,
+    notes: form.notes || null,
+  };
+}
+
 // ---- Category mappers ----------------------------------------------------
 // Like branches, categories are keyed by slug across the frontend (product.category
 // is a slug). `apiId` carries the backend integer key for update/delete.
@@ -357,5 +409,38 @@ export const Api = {
   async createTransaction(payload) {
     const res = await apiRequest("/transactions", { method: "POST", body: payload });
     return res.data;
+  },
+
+  // ---- CopperScan (waste copper wire measurements) ----
+  // `params` may include: branchId, search, from, to, gaugeSystem, page.
+  async listCopperScans(params = {}) {
+    const q = new URLSearchParams({ page_size: "300" });
+    if (params.branchId != null) q.set("branch_id", params.branchId);
+    if (params.search) q.set("search", params.search);
+    if (params.from) q.set("from", params.from);
+    if (params.to) q.set("to", params.to);
+    if (params.gaugeSystem) q.set("gauge_system", params.gaugeSystem);
+    const res = await apiRequest(`/copper-scans?${q.toString()}`);
+    return res.data || [];
+  },
+  async getCopperScan(id) {
+    const res = await apiRequest(`/copper-scans/${id}`);
+    return res.data;
+  },
+  async createCopperScan(payload) {
+    const res = await apiRequest("/copper-scans", { method: "POST", body: payload });
+    return res.data;
+  },
+  async deleteCopperScan(id) {
+    await apiRequest(`/copper-scans/${id}`, { method: "DELETE" });
+  },
+  async copperSummary(params = {}) {
+    const q = new URLSearchParams();
+    if (params.branchId != null) q.set("branch_id", params.branchId);
+    if (params.from) q.set("from", params.from);
+    if (params.to) q.set("to", params.to);
+    if (params.gaugeSystem) q.set("gauge_system", params.gaugeSystem);
+    const res = await apiRequest(`/copper-scans/summary?${q.toString()}`);
+    return res.data || {};
   },
 };
