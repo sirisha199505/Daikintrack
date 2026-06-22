@@ -355,12 +355,10 @@ export default function CopperScan() {
                 {trace.slice(1).map((p, i) => (
                   <line key={`l${i}`} x1={`${trace[i].x * 100}%`} y1={`${trace[i].y * 100}%`} x2={`${p.x * 100}%`} y2={`${p.y * 100}%`} stroke="#06b6d4" strokeWidth="3" />
                 ))}
+                {/* Coil diameter: a single drag line (no dots) */}
                 {coilPts.length === 2 && (
-                  <line x1={`${coilPts[0].x * 100}%`} y1={`${coilPts[0].y * 100}%`} x2={`${coilPts[1].x * 100}%`} y2={`${coilPts[1].y * 100}%`} stroke="#06b6d4" strokeWidth="3" strokeDasharray="6 4" />
+                  <line x1={`${coilPts[0].x * 100}%`} y1={`${coilPts[0].y * 100}%`} x2={`${coilPts[1].x * 100}%`} y2={`${coilPts[1].y * 100}%`} stroke="#06b6d4" strokeWidth="4" strokeLinecap="round" />
                 )}
-                {coilPts.map((p, i) => (
-                  <circle key={`d${i}`} cx={`${p.x * 100}%`} cy={`${p.y * 100}%`} r="6" fill="#0891b2" stroke="#fff" strokeWidth="2" />
-                ))}
               </svg>
             </div>
 
@@ -376,6 +374,23 @@ export default function CopperScan() {
                 <span className="text-cyan-600">▬</span> {isCoil ? "loop" : "wire"}
               </span>
             </div>
+
+            {/* Live measured length — always visible right under the image */}
+            {scaleSet && (
+              <div className="flex items-center justify-between rounded-xl bg-amber-50 px-4 py-3">
+                <span className="text-xs font-semibold uppercase tracking-wide text-amber-700/70">
+                  Measured length
+                </span>
+                <span className="text-2xl font-extrabold text-amber-700">
+                  {lengthM > 0 ? `${lengthM.toFixed(2)} m` : "—"}
+                  {lengthM > 0 && (
+                    <span className="ml-2 text-sm font-semibold text-amber-600/80">
+                      {lengthCm.toFixed(1)} cm
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
           </Card>
 
           {/* Right: reference + turns + result + save */}

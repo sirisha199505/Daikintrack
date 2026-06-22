@@ -19,7 +19,6 @@ export const NAV = {
     { to: "/app/branches", label: "Branch Management", short: "Branches", icon: Building2 },
     { to: "/app/categories", label: "Categories", short: "Categories", icon: Tags },
     { to: "/app/products", label: "Product Management", short: "Products", icon: Boxes },
-    { to: "/app/copper/analytics", label: "CopperScan", short: "Copper", icon: Cable },
   ],
   // Store Manager — operational: scanning, stock management, check-out history.
   store_manager: [
@@ -33,7 +32,6 @@ export const NAV = {
   distributor: [
     { to: "/app/dashboard", label: "Dashboard", short: "Dashboard", icon: LayoutDashboard },
     { to: "/app/products", label: "Products", short: "Products", icon: Boxes },
-    { to: "/app/copper/analytics", label: "CopperScan", short: "Copper", icon: Cable },
     { to: "/app/history", label: "History & Invoices", short: "History", icon: History },
     { to: "/app/recent", label: "Transaction Tracking", short: "Activity", icon: ClipboardList },
   ],

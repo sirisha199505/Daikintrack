@@ -114,12 +114,11 @@ export default function App() {
           }
         />
 
-        {/* CopperScan — capture for admin & store managers; analytics/history
-            readable by all three roles. */}
+        {/* CopperScan — store managers only. */}
         <Route
           path="copper"
           element={
-            <ProtectedRoute roles={["admin", "store_manager"]}>
+            <ProtectedRoute roles={["store_manager"]}>
               <CopperScan />
             </ProtectedRoute>
           }
@@ -127,7 +126,7 @@ export default function App() {
         <Route
           path="copper/history"
           element={
-            <ProtectedRoute roles={["admin", "store_manager", "distributor"]}>
+            <ProtectedRoute roles={["store_manager"]}>
               <CopperHistory />
             </ProtectedRoute>
           }
@@ -135,7 +134,7 @@ export default function App() {
         <Route
           path="copper/analytics"
           element={
-            <ProtectedRoute roles={["admin", "store_manager", "distributor"]}>
+            <ProtectedRoute roles={["store_manager"]}>
               <CopperDashboard />
             </ProtectedRoute>
           }
