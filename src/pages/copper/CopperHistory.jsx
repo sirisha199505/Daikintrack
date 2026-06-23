@@ -123,7 +123,7 @@ export default function CopperHistory() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <CopperTabs />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -138,7 +138,7 @@ export default function CopperHistory() {
       </div>
 
       {/* Totals */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-4">
         {[
           { label: "Scans", value: totals.count },
           { label: "Total length", value: fmtLength(totals.length) },

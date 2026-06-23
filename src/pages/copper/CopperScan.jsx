@@ -225,7 +225,7 @@ export default function CopperScan() {
           : "Drag along the wire following its curve. The length updates live." };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <CopperTabs />
 
       <div className="flex items-start justify-between gap-3">
@@ -292,7 +292,7 @@ export default function CopperScan() {
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Left: image + guided instruction */}
           <Card className="space-y-3 p-4">
             <div className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${banner.cls}`}>

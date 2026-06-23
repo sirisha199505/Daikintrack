@@ -84,7 +84,7 @@ export default function History() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
         <Skeleton className="h-10 w-56" />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {Array.from({ length: 2 }).map((_, i) => (
@@ -97,7 +97,7 @@ export default function History() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-800">History</h1>
         <p className="text-sm text-slate-500">

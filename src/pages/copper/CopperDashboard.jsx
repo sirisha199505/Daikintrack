@@ -74,7 +74,7 @@ export default function CopperDashboard() {
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <CopperTabs />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -119,7 +119,7 @@ export default function CopperDashboard() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Skeleton className="h-72 w-full" />
           <Skeleton className="h-72 w-full" />
         </div>
@@ -128,7 +128,7 @@ export default function CopperDashboard() {
           <EmptyState icon={Cable} title="No copper scans in range" subtitle="Record scans or widen the date filter." />
         </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Length by branch */}
           <Card className="p-5">
             <h3 className="text-base font-bold text-slate-800">Length by branch</h3>

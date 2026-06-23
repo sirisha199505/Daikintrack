@@ -39,7 +39,7 @@ export default function CategoryManagement() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
         <Skeleton className="h-10 w-56" />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -51,7 +51,7 @@ export default function CategoryManagement() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Categories</h1>

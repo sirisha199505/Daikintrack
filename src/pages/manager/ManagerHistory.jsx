@@ -49,7 +49,7 @@ export default function ManagerHistory() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
         <Skeleton className="h-10 w-48" />
         <Skeleton className="h-12 w-full" />
         <Skeleton className="h-96 w-full" />
@@ -58,7 +58,7 @@ export default function ManagerHistory() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-800">History</h1>
         <p className="text-sm text-slate-500">

@@ -91,7 +91,7 @@ export default function ProductManager({ branchId = null, title, subtitle, readO
 
   if (loading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
         <Skeleton className="h-10 w-56" />
         <Skeleton className="h-12 w-full" />
         <Skeleton className="h-80 w-full" />
@@ -100,7 +100,7 @@ export default function ProductManager({ branchId = null, title, subtitle, readO
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">{title}</h1>
