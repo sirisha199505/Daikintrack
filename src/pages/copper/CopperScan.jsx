@@ -8,9 +8,8 @@ import { useCopperScans } from "../../context/CopperScanContext";
 import { useToast } from "../../components/ui/Toast";
 import { Card } from "../../components/ui/Primitives";
 import CopperTabs from "../../components/copper/CopperTabs";
-import { referenceById } from "../../lib/copper";
+import { REFERENCES, referenceById } from "../../lib/copper";
 
-const REF = referenceById("coin10");
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 const pxDist = (a, b, W, H) => Math.hypot((a.x - b.x) * W, (a.y - b.y) * H);
 
@@ -46,7 +45,8 @@ export default function CopperScan() {
   const [image, setImage] = useState(null);
   const [mode, setMode] = useState("trace"); // trace | coil
   const [wireMode, setWireMode] = useState("straight"); // straight | curved
-  const [refCm, setRefCm] = useState(String(REF.cm));
+  const [refId, setRefId] = useState("coin10"); // coin10 | a4
+  const [refCm, setRefCm] = useState(String(referenceById("coin10").cm));
 
   const [calib, setCalib] = useState([]); // 2 pts: the scale line across the coin
   const [trace, setTrace] = useState([]); // trace path (flat) — drag samples points
@@ -65,6 +65,7 @@ export default function CopperScan() {
   const drawingLoop = useRef(false);
 
   const isCoil = mode === "coil";
+  const ref = referenceById(refId);
   const refMm = (Number(refCm) || 0) * 10;
   const scaleSet = calib.length === 2;
   const turnsNum = Math.max(0, parseInt(turns, 10) || 0);
@@ -169,6 +170,11 @@ export default function CopperScan() {
     setTrace([]);
     setCoilPts([]);
   }
+  function pickRef(id) {
+    setRefId(id);
+    setRefCm(String(referenceById(id).cm));
+    setCalib([]); // scale must be re-drawn for the new reference
+  }
   // Undo the last action: a curved trace removes its last point; straight/coil
   // (single drags) clear so you can redraw.
   function undo() {
@@ -207,7 +213,7 @@ export default function CopperScan() {
     try {
       await createScan({
         branchId,
-        referenceType: "coin10",
+        referenceType: refId,
         referenceMm: refMm,
         pxPerMm,
         lengthM,
@@ -216,7 +222,7 @@ export default function CopperScan() {
         points: {
           mode,
           shape: isCoil ? "coil" : wireMode,
-          reference: { id: "coin10", cm: Number(refCm) || 0, points: calib },
+          reference: { id: refId, cm: Number(refCm) || 0, points: calib },
           trace,
           coil: isCoil ? { turns: turnsNum, points: coilPts } : null,
         },
@@ -234,7 +240,7 @@ export default function CopperScan() {
   const step = !scaleSet ? "scale" : "wire";
   const banner = !scaleSet
     ? { cls: "border-violet-200 bg-violet-50 text-violet-800", badge: "Step 1 · draw scale",
-        text: `Drag a line across the ${REF.label} (${REF.dimLabel}) — this sets the scale.` }
+        text: `Drag a line across the ${ref.label} (${ref.dimLabel}) — this sets the scale.` }
     : { cls: "border-cyan-200 bg-cyan-50 text-cyan-800",
         badge: lengthM > 0 ? "Step 2 · drawn ✓" : "Step 2 · draw the wire",
         text: isCoil
@@ -295,7 +301,7 @@ export default function CopperScan() {
             <div>
               <p className="font-semibold text-slate-700">Upload a photo of your wire</p>
               <p className="mt-1 max-w-sm text-xs text-slate-400">
-                Place the copper wire on a flat surface next to a ₹10 coin, then upload or capture a
+                Place the copper wire on a flat surface next to a ₹10 coin or A4 sheet, then upload or capture a
                 clear photo.
               </p>
             </div>
@@ -442,11 +448,23 @@ export default function CopperScan() {
                 <Coins className="h-4 w-4 text-amber-600" /> Reference object
               </h3>
               <p className="text-xs text-slate-400">Its known size sets the scale of the photo.</p>
-              <div className="mt-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
-                🪙 {REF.label}
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {REFERENCES.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => pickRef(r.id)}
+                    className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${
+                      refId === r.id
+                        ? "border-amber-500 bg-amber-50 text-amber-700"
+                        : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {r.label}
+                  </button>
+                ))}
               </div>
               <label className="mt-3 block text-xs font-semibold text-slate-500">
-                Coin diameter in cm (default 2.7)
+                {ref.label} {ref.dimLabel} in cm
                 <input
                   type="number" step="0.1" min="0" value={refCm}
                   onChange={(e) => {
@@ -455,6 +473,7 @@ export default function CopperScan() {
                   }}
                   className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700"
                 />
+                <span className="mt-1 block text-[11px] font-normal text-slate-400">{ref.hint}</span>
               </label>
               {isCoil && (
                 <label className="mt-3 block text-xs font-semibold text-slate-500">

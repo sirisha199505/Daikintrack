@@ -10,8 +10,8 @@ export const COPPER_DENSITY = 8.96; // g/cm³
 // A4 sheet edges in millimetres.
 export const A4 = { short: 210, long: 297 };
 
-// The single reference object used to calibrate scale (matches the repo).
-// `cm` is the coin's real diameter; it stays editable in the UI.
+// Reference objects used to calibrate scale. `cm` is the real-world length of
+// the dimension the user drags a line across; it stays editable in the UI.
 export const REFERENCES = [
   {
     id: "coin10",
@@ -19,6 +19,13 @@ export const REFERENCES = [
     cm: 2.7,
     dimLabel: "diameter",
     hint: "Drag a line straight across the coin (about 2.7 cm).",
+  },
+  {
+    id: "a4",
+    label: "A4 sheet",
+    cm: 21.0,
+    dimLabel: "short edge",
+    hint: "Drag across the short edge (21 cm), or set 29.7 for the long edge.",
   },
 ];
 export const referenceById = (id) => REFERENCES.find((r) => r.id === id) || REFERENCES[0];
