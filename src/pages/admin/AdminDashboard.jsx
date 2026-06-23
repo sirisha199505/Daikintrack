@@ -357,6 +357,7 @@ function HubCarousel({
                     centerValue={num(hubStats.totalStock)}
                     centerLabel="units"
                     unit="units"
+                    showTooltip
                   />
                 ) : (
                   <div className="grid h-[150px] place-items-center text-sm text-slate-400">
@@ -371,7 +372,7 @@ function HubCarousel({
                   Low Stock ({num(hubStats.lowStock)})
                 </div>
                 {lowData.length ? (
-                  <DonutChart data={lowData} innerRadius={0} height={150} unit="units" />
+                  <DonutChart data={lowData} innerRadius={0} height={150} unit="units" showTooltip />
                 ) : (
                   <div className="grid h-[150px] place-items-center text-center text-sm text-slate-400">
                     All healthy
