@@ -24,6 +24,7 @@ export default function InvoiceFormModal({ open, onClose, mode = "purchase", onP
   const { toast } = useToast();
 
   const [partyId, setPartyId] = useState("");
+  const [invoiceNo, setInvoiceNo] = useState("");
   const [supplierInvoiceNo, setSupplierInvoiceNo] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState([]);
@@ -33,7 +34,7 @@ export default function InvoiceFormModal({ open, onClose, mode = "purchase", onP
   useEffect(() => {
     if (open) {
       /* eslint-disable react-hooks/set-state-in-effect */
-      setPartyId(""); setSupplierInvoiceNo(""); setNotes(""); setLines([]); setScanning(autoScan);
+      setPartyId(""); setInvoiceNo(""); setSupplierInvoiceNo(""); setNotes(""); setLines([]); setScanning(autoScan);
       /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [open, mode, autoScan]);
@@ -73,9 +74,9 @@ export default function InvoiceFormModal({ open, onClose, mode = "purchase", onP
     setSaving(true);
     try {
       if (isSale) {
-        await createSale({ customerId: Number(partyId), branchId, notes, lines: valid });
+        await createSale({ customerId: Number(partyId), invoiceNo, branchId, notes, lines: valid });
       } else {
-        await createPurchase({ supplierId: Number(partyId), supplierInvoiceNo, branchId, notes, lines: valid });
+        await createPurchase({ supplierId: Number(partyId), invoiceNo, supplierInvoiceNo, branchId, notes, lines: valid });
       }
       toast(`${isSale ? "Sale" : "Purchase"} posted`, "success");
       onPosted?.();
@@ -104,6 +105,12 @@ export default function InvoiceFormModal({ open, onClose, mode = "purchase", onP
               <option value="">Select {isSale ? "customer" : "supplier"}…</option>
               {parties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-semibold text-slate-600">
+              Invoice No. <span className="font-normal text-slate-400">(optional — auto if blank)</span>
+            </span>
+            <input className={`${inputCls} font-mono`} value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} placeholder={isSale ? "SINV-2026-…" : "PINV-2026-…"} />
           </label>
           {!isSale && (
             <label className="block">

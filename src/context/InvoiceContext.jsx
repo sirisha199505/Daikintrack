@@ -63,6 +63,7 @@ export function InvoiceProvider({ children }) {
     async (form) => {
       const payload = {
         supplier_id: form.supplierId,
+        invoice_no: form.invoiceNo || undefined,
         supplier_invoice_no: form.supplierInvoiceNo || undefined,
         branch_id: form.branchId ?? undefined,
         notes: form.notes || undefined,
@@ -83,6 +84,7 @@ export function InvoiceProvider({ children }) {
     async (form) => {
       const payload = {
         customer_id: form.customerId,
+        invoice_no: form.invoiceNo || undefined,
         branch_id: form.branchId ?? undefined,
         notes: form.notes || undefined,
         items: (form.lines || []).map((l) => ({
