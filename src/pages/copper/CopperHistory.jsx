@@ -34,6 +34,28 @@ const fmtDate = (d) =>
 
 const meters = (m) => `${(Number(m) || 0).toFixed(2)} m`;
 
+const methodLabel = (m) =>
+  m === "weight" ? "Weight" : m === "ai_photo" ? "AI Photo" : m === "coil" ? "Coil" : "Trace";
+
+// Methods that carry a remaining/used leftover breakdown.
+const hasLeftover = (m) => m === "weight" || m === "ai_photo";
+
+function MethodBadge({ method }) {
+  const cls =
+    method === "weight"
+      ? "bg-emerald-100 text-emerald-700"
+      : method === "ai_photo"
+      ? "bg-fuchsia-100 text-fuchsia-700"
+      : method === "coil"
+      ? "bg-violet-100 text-violet-700"
+      : "bg-cyan-100 text-cyan-700";
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${cls}`}>
+      {methodLabel(method)}
+    </span>
+  );
+}
+
 export default function CopperHistory() {
   const { user } = useAuth();
   const { branches } = useAdmin();
@@ -102,12 +124,19 @@ export default function CopperHistory() {
   }
 
   function exportCsv() {
-    const head = ["Date", "Branch", "Length (m)", "Length (cm)", "Recorded by", "Notes"];
+    const head = [
+      "Date", "Branch", "Method", "Product", "Start (m)", "Used (m)",
+      "Remaining (m)", "Leftover (kg)", "Recorded by", "Notes",
+    ];
     const rows = scans.map((s) => [
       fmtDate(s.createdAt),
       s.branchName || "",
+      methodLabel(s.method),
+      s.product || "",
+      s.startLengthM != null ? Number(s.startLengthM).toFixed(2) : "",
       (s.lengthM || 0).toFixed(2),
-      ((s.lengthM || 0) * 100).toFixed(1),
+      s.remainingLengthM != null ? Number(s.remainingLengthM).toFixed(2) : "",
+      s.leftoverWeightKg != null ? Number(s.leftoverWeightKg).toFixed(2) : "",
       s.actor || "",
       (s.notes || "").replace(/[\n\r,]+/g, " "),
     ]);
@@ -195,7 +224,8 @@ export default function CopperHistory() {
                   <tr className="border-b border-slate-100 bg-slate-50/60 text-[11px] font-bold uppercase tracking-wide text-slate-400">
                     <th className="px-5 py-3.5">Date</th>
                     <th className="px-5 py-3.5">Branch</th>
-                    <th className="px-5 py-3.5 text-right">Length</th>
+                    <th className="px-5 py-3.5">Type</th>
+                    <th className="px-5 py-3.5 text-right">Used / Remaining</th>
                     <th className="px-5 py-3.5">By</th>
                     <th className="px-5 py-3.5 text-right">Actions</th>
                   </tr>
@@ -205,7 +235,15 @@ export default function CopperHistory() {
                     <tr key={s.id} className="border-b border-slate-50 last:border-0 hover:bg-amber-50/30">
                       <td className="px-5 py-3 text-slate-600">{fmtDate(s.createdAt)}</td>
                       <td className="px-5 py-3 font-semibold text-slate-700">{s.branchName || "—"}</td>
-                      <td className="px-5 py-3 text-right font-bold text-amber-700">{meters(s.lengthM)}</td>
+                      <td className="px-5 py-3"><MethodBadge method={s.method} /></td>
+                      <td className="px-5 py-3 text-right">
+                        <span className="font-bold text-amber-700">{meters(s.lengthM)}</span>
+                        {hasLeftover(s.method) && s.remainingLengthM != null && (
+                          <span className="ml-2 text-xs font-medium text-emerald-600">
+                            {s.method === "ai_photo" ? "~" : ""}{meters(s.remainingLengthM)} left
+                          </span>
+                        )}
+                      </td>
                       <td className="px-5 py-3 text-slate-500">{s.actor || "—"}</td>
                       <td className="px-5 py-3">
                         <div className="flex justify-end gap-1.5">
@@ -234,13 +272,30 @@ export default function CopperHistory() {
               <Card key={s.id} className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="font-semibold text-slate-700">{s.branchName || "—"}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-slate-700">{s.branchName || "—"}</span>
+                      <MethodBadge method={s.method} />
+                    </div>
                     <div className="text-xs text-slate-400">{fmtDate(s.createdAt)}</div>
+                    {s.product && <div className="text-[11px] text-slate-400">{s.product}</div>}
                   </div>
-                  <div className="rounded-lg bg-amber-50 px-3 py-1 text-right">
+                  <div className="shrink-0 rounded-lg bg-amber-50 px-3 py-1 text-right">
                     <div className="font-bold text-amber-700">{meters(s.lengthM)}</div>
+                    <div className="text-[10px] uppercase tracking-wide text-amber-700/60">used</div>
                   </div>
                 </div>
+                {hasLeftover(s.method) && s.remainingLengthM != null && (
+                  <div className="mt-2 flex items-center justify-between rounded-lg bg-emerald-50 px-3 py-1.5 text-xs">
+                    <span className="font-semibold text-emerald-700">
+                      {s.method === "ai_photo" ? "~" : ""}{meters(s.remainingLengthM)} remaining
+                    </span>
+                    {s.method === "ai_photo"
+                      ? <span className="text-emerald-600/80">AI estimate</span>
+                      : s.leftoverWeightKg != null && (
+                          <span className="text-emerald-600/80">{Number(s.leftoverWeightKg).toFixed(2)} kg leftover</span>
+                        )}
+                  </div>
+                )}
                 {s.notes && <p className="mt-2 text-xs text-slate-500">{s.notes}</p>}
                 <div className="mt-3 flex gap-2">
                   {s.hasImage && (
@@ -276,7 +331,25 @@ export default function CopperHistory() {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <Info label="Branch" value={viewing.branchName} />
                 <Info label="Date" value={fmtDate(viewing.createdAt)} />
-                <Info label="Length" value={fmtLength(viewing.lengthM)} />
+                <Info label="Method" value={methodLabel(viewing.method)} />
+                {viewing.product && <Info label="Product" value={viewing.product} />}
+                {hasLeftover(viewing.method) ? (
+                  <>
+                    <Info label="Start" value={fmtLength(viewing.startLengthM)} />
+                    <Info label="Used" value={fmtLength(viewing.lengthM)} />
+                    <Info label="Remaining" value={fmtLength(viewing.remainingLengthM)} />
+                    {viewing.method === "weight" ? (
+                      <Info
+                        label="Leftover weight"
+                        value={viewing.leftoverWeightKg != null ? `${Number(viewing.leftoverWeightKg).toFixed(2)} kg` : "—"}
+                      />
+                    ) : (
+                      <Info label="Source" value="AI photo estimate" />
+                    )}
+                  </>
+                ) : (
+                  <Info label="Length" value={fmtLength(viewing.lengthM)} />
+                )}
                 <Info label="Recorded by" value={viewing.actor} />
               </div>
               {viewing.notes && <p className="text-sm text-slate-600">{viewing.notes}</p>}

@@ -52,16 +52,6 @@ export default function ManagerDashboard() {
       <GreetingHeader
         name={user.name}
         subtitle={viewedBranch ? branchLabel : "All Hubs · Store Operations"}
-        badge={
-          viewedBranch ? (
-            <div className="hidden shrink-0 rounded-xl bg-white/10 px-4 py-2.5 text-right ring-1 ring-white/15 sm:block">
-              <div className="text-[10px] font-semibold uppercase tracking-widest text-white/60">
-                Code
-              </div>
-              <div className="text-lg font-bold">{viewedBranch.code}</div>
-            </div>
-          ) : null
-        }
       />
 
       {isViewingOtherBranch && (

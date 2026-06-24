@@ -1,550 +1,849 @@
-import { useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Camera, Upload, RotateCcw, Undo2, Check, Cable, Coins, Info } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Cable,
+  Camera,
+  Save,
+  AlertTriangle,
+  CircleDot,
+  Check,
+  Upload,
+  RefreshCw,
+  RotateCcw,
+  Ruler,
+  Minus,
+  X,
+} from "lucide-react";
+import { Card, Button, Spinner } from "../../components/ui/Primitives";
+import CopperTabs from "../../components/copper/CopperTabs";
 import { useAuth } from "../../context/AuthContext";
 import { useInventory } from "../../context/InventoryContext";
-import { useAdmin } from "../../context/AdminContext";
 import { useCopperScans } from "../../context/CopperScanContext";
 import { useToast } from "../../components/ui/Toast";
-import { Card } from "../../components/ui/Primitives";
-import CopperTabs from "../../components/copper/CopperTabs";
-import { REFERENCES, referenceById } from "../../lib/copper";
+import {
+  detectSpiral,
+  spiralLengthM,
+  spiralConfidence,
+  fmtLength,
+  REFERENCES,
+  referenceById,
+  polylinePx,
+} from "../../lib/copper";
 
-const clamp01 = (v) => Math.min(1, Math.max(0, v));
-const pxDist = (a, b, W, H) => Math.hypot((a.x - b.x) * W, (a.y - b.y) * H);
+// CopperScan — "Calibration Frame" measurement (automatic).
+//
+// A flat copper coil is photographed from the top inside a fixed square frame
+// of known size (FRAME_CM). The frame is the scale reference, so
+// pixels → centimetres is just frameSidePx / FRAME_CM. The image is then
+// analysed (see detectSpiral in lib/copper.js): the coil's centre, outer
+// diameter, inner-hole diameter and visible turn count are read straight from
+// the pixels, and the length follows the Archimedean-spiral identity
+//   length = π · N · (D_outer + D_inner) / 2.
+// The operator only confirms / nudges the turn count, which is the least
+// reliable thing to read from a single photo.
 
-// Downscale + compress a photo to a base64 JPEG (no file store on the API).
-function fileToDataUrl(file, max = 1400, quality = 0.72) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const scale = Math.min(1, max / Math.max(img.width, img.height));
-      const w = Math.round(img.width * scale);
-      const h = Math.round(img.height * scale);
-      const canvas = document.createElement("canvas");
-      canvas.width = w;
-      canvas.height = h;
-      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL("image/jpeg", quality));
-    };
-    img.onerror = reject;
-    img.src = url;
-  });
+const FRAME_CM = 15; // calibration square edge, in centimetres
+const FRAME_FRAC = 0.62; // fraction of the shorter media edge it occupies
+
+// Measure a DOM node's rendered size, re-running whenever the node mounts.
+function useElementSize() {
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  const roRef = useRef(null);
+  const ref = useCallback((node) => {
+    if (roRef.current) {
+      roRef.current.disconnect();
+      roRef.current = null;
+    }
+    if (node) {
+      const update = () => {
+        const r = node.getBoundingClientRect();
+        setSize({ w: r.width, h: r.height });
+      };
+      update();
+      const ro = new ResizeObserver(update);
+      ro.observe(node);
+      roRef.current = ro;
+    }
+  }, []);
+  return [ref, size];
 }
 
 export default function CopperScan() {
   const { user } = useAuth();
   const { viewBranchId } = useInventory();
-  const { branches } = useAdmin();
   const { createScan } = useCopperScans();
   const { toast } = useToast();
-  const navigate = useNavigate();
 
-  const [image, setImage] = useState(null);
-  const [mode, setMode] = useState("trace"); // trace | coil
-  const [wireMode, setWireMode] = useState("straight"); // straight | curved
-  const [refId, setRefId] = useState("coin10"); // coin10 | a4
-  const [refCm, setRefCm] = useState(String(referenceById("coin10").cm));
+  const [stage, setStage] = useState("intro"); // intro | camera | measure
+  const [mode, setMode] = useState("coil"); // coil (auto spiral) | straight (reference line)
+  const [camError, setCamError] = useState("");
+  const [captured, setCaptured] = useState(null); // base64 JPEG of the still
+  const [capAspect, setCapAspect] = useState(3 / 4);
+  const [camAspect, setCamAspect] = useState(3 / 4);
 
-  const [calib, setCalib] = useState([]); // 2 pts: the scale line across the coin
-  const [trace, setTrace] = useState([]); // trace path (flat) — drag samples points
-  const [coilPts, setCoilPts] = useState([]); // 2 pts across one loop
-  const [turns, setTurns] = useState("10");
-
+  const [detection, setDetection] = useState(null);
+  const [detecting, setDetecting] = useState(false);
+  const [sensitivity, setSensitivity] = useState(50); // 0–100 slider
+  const [redetect, setRedetect] = useState(0); // bump to force a re-run
+  const [turns, setTurns] = useState(0);
   const [notes, setNotes] = useState("");
-  const [branchId, setBranchId] = useState(viewBranchId || user.branchId || "");
   const [saving, setSaving] = useState(false);
 
-  const boxRef = useRef(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
   const fileRef = useRef(null);
-  const cameraRef = useRef(null);
-  const drawingScale = useRef(false);
-  const drawingWire = useRef(false);
-  const drawingLoop = useRef(false);
+  const [mediaRef, mediaSize] = useElementSize();
 
-  const isCoil = mode === "coil";
-  const ref = referenceById(refId);
-  const refMm = (Number(refCm) || 0) * 10;
-  const scaleSet = calib.length === 2;
-  const turnsNum = Math.max(0, parseInt(turns, 10) || 0);
-
-  const pxPerMm = useMemo(() => {
-    if (calib.length < 2 || !refMm || !boxRef.current) return 0;
-    const W = boxRef.current.clientWidth;
-    const H = boxRef.current.clientHeight;
-    return pxDist(calib[0], calib[1], W, H) / refMm;
-  }, [calib, refMm]);
-
-  // Effective wire length in metres.
-  const lengthM = useMemo(() => {
-    if (!pxPerMm || !boxRef.current) return 0;
-    const W = boxRef.current.clientWidth;
-    const H = boxRef.current.clientHeight;
-    if (isCoil) {
-      if (coilPts.length < 2 || turnsNum < 1) return 0;
-      const diaMm = pxDist(coilPts[0], coilPts[1], W, H) / pxPerMm;
-      // length = turns × π × loop diameter, using π = 22/7.
-      return (turnsNum * (22 / 7) * diaMm) / 1000;
-    }
-    if (trace.length < 2) return 0;
-    let px = 0;
-    for (let i = 1; i < trace.length; i++) px += pxDist(trace[i], trace[i - 1], W, H);
-    return px / pxPerMm / 1000;
-  }, [isCoil, trace, coilPts, turnsNum, pxPerMm]);
-
-  const lengthCm = lengthM * 100;
-  const needsBranch = !branchId;
-
-  // Coil geometry for the on-image loop circle + readout. Read live box size
-  // (same as the length memo) to keep the circle aligned with the drag.
-  const boxW = boxRef.current?.clientWidth || 1;
-  const boxH = boxRef.current?.clientHeight || 1;
-  const coilSpanPx = coilPts.length === 2 ? pxDist(coilPts[0], coilPts[1], boxW, boxH) : 0;
-  const coilDiaCm = pxPerMm ? coilSpanPx / pxPerMm / 10 : 0;
-  const coilCenter =
-    coilPts.length === 2
-      ? { x: (coilPts[0].x + coilPts[1].x) / 2, y: (coilPts[0].y + coilPts[1].y) / 2 }
-      : null;
-
-  function toPoint(e) {
-    const rect = boxRef.current.getBoundingClientRect();
+  // Geometry of the calibration square in the current media coordinate space.
+  const frame = useMemo(() => {
+    const side = FRAME_FRAC * Math.min(mediaSize.w, mediaSize.h);
     return {
-      x: clamp01((e.clientX - rect.left) / rect.width),
-      y: clamp01((e.clientY - rect.top) / rect.height),
+      side,
+      x: (mediaSize.w - side) / 2,
+      y: (mediaSize.h - side) / 2,
+      pxPerCm: side > 0 ? side / FRAME_CM : 0,
     };
-  }
+  }, [mediaSize]);
 
-  function onPointerDown(e) {
-    if (!boxRef.current || !image) return;
-    const p = toPoint(e);
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-    if (!scaleSet) {
-      setCalib([p, p]);
-      drawingScale.current = true;
-      return;
-    }
-    if (isCoil) {
-      setCoilPts([p, p]);
-      drawingLoop.current = true;
-      return;
-    }
-    if (wireMode === "straight") {
-      setTrace([p, p]);
-    } else {
-      setTrace([p]);
-    }
-    drawingWire.current = true;
-  }
+  // ---- Camera lifecycle -----------------------------------------------------
+  useEffect(() => {
+    if (stage !== "camera") return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false,
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play().catch(() => {});
+        }
+      } catch {
+        if (!cancelled)
+          setCamError(
+            "Couldn't open the camera. Grant camera permission and use a device with a rear camera, or upload a photo instead."
+          );
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+    };
+  }, [stage]);
 
-  function onPointerMove(e) {
-    if (!boxRef.current) return;
-    const p = toPoint(e);
-    if (drawingScale.current) return setCalib((prev) => [prev[0], p]);
-    if (drawingLoop.current) return setCoilPts((prev) => [prev[0], p]);
-    if (drawingWire.current) {
-      if (wireMode === "straight") return setTrace((prev) => [prev[0], p]);
-      // curved: sample points along the drag
-      setTrace((prev) => {
-        const last = prev[prev.length - 1];
-        if (!last) return [p];
-        const W = boxRef.current.clientWidth;
-        const H = boxRef.current.clientHeight;
-        return pxDist(last, p, W, H) < 5 ? prev : [...prev, p];
+  // Stop the camera if the component unmounts mid-capture.
+  useEffect(
+    () => () => {
+      if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
+    },
+    []
+  );
+
+  // ---- Automatic detection on the captured still ----------------------------
+  useEffect(() => {
+    if (
+      mode !== "coil" ||
+      stage !== "measure" ||
+      !captured ||
+      mediaSize.w < 1 ||
+      frame.pxPerCm <= 0
+    )
+      return undefined;
+    let cancelled = false;
+    const img = new Image();
+    img.onload = () => {
+      if (cancelled) return;
+      const w = Math.round(mediaSize.w);
+      const h = Math.round(mediaSize.h);
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0, w, h); // same mapping as the on-screen <img>
+      const { data } = ctx.getImageData(0, 0, w, h);
+      const det = detectSpiral({
+        data,
+        width: w,
+        height: h,
+        frame,
+        sensitivity: (50 - sensitivity) / 250, // higher slider → fainter lines
       });
+      if (cancelled) return;
+      setDetection(det);
+      if (det) setTurns(det.turns || 0);
+      setDetecting(false);
+    };
+    img.onerror = () => {
+      if (!cancelled) {
+        setDetection(null);
+        setDetecting(false);
+      }
+    };
+    img.src = captured;
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, stage, captured, mediaSize.w, mediaSize.h, frame, sensitivity, redetect]);
+
+  function openCamera() {
+    setCamError("");
+    setStage("camera");
+  }
+
+  function capture() {
+    const v = videoRef.current;
+    if (!v || !v.videoWidth || !v.videoHeight) {
+      setCamError("Camera is still warming up — wait a moment and try again.");
+      return;
     }
-  }
-  function onPointerUp() {
-    drawingScale.current = false;
-    drawingWire.current = false;
-    drawingLoop.current = false;
-  }
-
-  function switchMode(next) {
-    setMode(next);
-    setTrace([]);
-    setCoilPts([]);
-  }
-  function clearWire() {
-    setTrace([]);
-    setCoilPts([]);
-  }
-  function pickRef(id) {
-    setRefId(id);
-    setRefCm(String(referenceById(id).cm));
-    setCalib([]); // scale must be re-drawn for the new reference
-  }
-  // Undo the last action: a curved trace removes its last point; straight/coil
-  // (single drags) clear so you can redraw.
-  function undo() {
-    if (isCoil) return setCoilPts([]);
-    if (wireMode === "curved") return setTrace((p) => p.slice(0, -1));
-    setTrace([]);
-  }
-
-  async function onPickImage(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      setImage(await fileToDataUrl(file));
-      setCalib([]);
-      setTrace([]);
-      setCoilPts([]);
-    } catch {
-      toast("Could not read that image. Try another.", "error");
-    } finally {
-      e.target.value = "";
-    }
-  }
-
-  function startOver() {
-    setImage(null);
-    setCalib([]);
-    setTrace([]);
-    setCoilPts([]);
+    const c = document.createElement("canvas");
+    c.width = v.videoWidth;
+    c.height = v.videoHeight;
+    c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+    setCaptured(c.toDataURL("image/jpeg", 0.72));
+    setCapAspect(v.videoWidth / v.videoHeight);
+    setDetection(null);
+    setDetecting(true);
     setNotes("");
+    setStage("measure");
   }
+
+  // Load a still from an uploaded / gallery file instead of the live camera.
+  function onPickFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast("Please choose an image file.", "error");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = String(reader.result);
+      const img = new Image();
+      img.onload = () => {
+        setCaptured(url);
+        setCapAspect(img.naturalWidth / img.naturalHeight || 3 / 4);
+        setDetection(null);
+        setDetecting(true);
+        setNotes("");
+        setStage("measure");
+      };
+      img.onerror = () => toast("That image couldn't be read.", "error");
+      img.src = url;
+    };
+    reader.onerror = () => toast("That image couldn't be read.", "error");
+    reader.readAsDataURL(file);
+  }
+
+  function retake() {
+    setCaptured(null);
+    setDetection(null);
+    setStage("intro");
+  }
+
+  // ---- Derived measurements -------------------------------------------------
+  const outerCm = detection ? (2 * detection.outerR) / frame.pxPerCm : 0;
+  const innerCm = detection ? (2 * detection.innerR) / frame.pxPerCm : 0;
+  const lengthM = spiralLengthM({ turns, outerCm, innerCm });
+  const confidence = detection ? spiralConfidence({ turns, outerCm, innerCm }) : 0;
+  const ready = Boolean(detection) && outerCm > innerCm && turns >= 1;
 
   async function save() {
-    if (needsBranch) return toast("Select a branch first.", "error");
-    if (lengthM <= 0) return toast("Measure the wire before saving.", "error");
+    const branchId = viewBranchId || user.branchId;
+    if (!branchId) {
+      toast("Select a branch first.", "error");
+      return;
+    }
     setSaving(true);
     try {
       await createScan({
         branchId,
-        referenceType: refId,
-        referenceMm: refMm,
-        pxPerMm,
+        method: "coil",
+        referenceType: "frame",
+        referenceMm: FRAME_CM * 10,
+        pxPerMm: frame.pxPerCm / 10,
         lengthM,
-        image,
-        notes,
+        image: captured,
         points: {
-          mode,
-          shape: isCoil ? "coil" : wireMode,
-          reference: { id: refId, cm: Number(refCm) || 0, points: calib },
-          trace,
-          coil: isCoil ? { turns: turnsNum, points: coilPts } : null,
+          kind: "spiral_auto",
+          turns,
+          outerCm: Math.round(outerCm * 10) / 10,
+          innerCm: Math.round(innerCm * 10) / 10,
+          confidence,
         },
+        notes: notes.trim() || null,
       });
-      toast(`Saved · ${lengthM.toFixed(2)} m`, "success");
-      startOver();
-      navigate("/app/copper/history");
-    } catch (err) {
-      toast(err.message || "Failed to save scan.", "error");
+      toast("Coil scan saved", "success");
+      retake();
+    } catch (e) {
+      toast(e.message || "Could not save the scan.", "error");
     } finally {
       setSaving(false);
     }
   }
 
-  const step = !scaleSet ? "scale" : "wire";
-  const banner = !scaleSet
-    ? { cls: "border-violet-200 bg-violet-50 text-violet-800", badge: "Step 1 · draw scale",
-        text: `Drag a line across the ${ref.label} (${ref.dimLabel}) — this sets the scale.` }
-    : { cls: "border-cyan-200 bg-cyan-50 text-cyan-800",
-        badge: lengthM > 0 ? "Step 2 · drawn ✓" : "Step 2 · draw the wire",
-        text: isCoil
-          ? "Drag a line across ONE loop of the coil, then set the number of turns."
-          : wireMode === "straight"
-          ? "Drag from one end of the wire to the other — straight-line distance."
-          : "Drag along the wire following its curve. The length updates live." };
-
   return (
     <div className="space-y-6">
       <CopperTabs />
 
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-800">
-            <Cable className="h-6 w-6 text-amber-600" /> Scan Wire
-          </h1>
-          <p className="text-sm text-slate-500">Set the scale with a reference, then measure the wire.</p>
-        </div>
-        {image && (
-          <button onClick={startOver} className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-600">
-            New scan
-          </button>
-        )}
-      </div>
-
-      {/* Mode tabs */}
-      <div className="space-y-2">
-        <div className="inline-flex rounded-xl bg-slate-100 p-1">
-          {[
-            { id: "trace", label: "Straight / curved wire" },
-            { id: "coil", label: "Coiled wire (loops)" },
-          ].map((t) => (
-            <button
-              key={t.id}
-              onClick={() => switchMode(t.id)}
-              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
-                mode === t.id ? "bg-white text-amber-700 shadow" : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <p className="text-xs text-slate-400">
-          {isCoil
-            ? "For wire wound in many loops: measure one loop and enter how many turns."
-            : "For wire you can lay out: trace along it, following each bend."}
+      <div>
+        <h1 className="flex items-center gap-2 text-xl font-bold text-slate-800 sm:text-2xl">
+          <Cable className="h-6 w-6 text-amber-600" /> Measure Copper
+        </h1>
+        <p className="text-sm text-slate-500">
+          {mode === "coil"
+            ? `Coil method — photograph the flat coil inside the ${FRAME_CM} cm frame; the length is read automatically from the image.`
+            : "Straight wire method — photograph the pipe beside a known reference, mark the reference and the wire, and the length is scaled from it."}
         </p>
       </div>
 
-      {!image ? (
-        <Card className="p-4">
-          <div className="flex min-h-[300px] flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-slate-200 p-6 text-center">
-            <div className="grid h-14 w-14 place-items-center rounded-full bg-amber-50 text-amber-600">
-              <Camera className="h-7 w-7" />
-            </div>
-            <div>
-              <p className="font-semibold text-slate-700">Upload a photo of your wire</p>
-              <p className="mt-1 max-w-sm text-xs text-slate-400">
-                Place the copper wire on a flat surface next to a ₹10 coin or A4 sheet, then upload or capture a
-                clear photo.
-              </p>
-            </div>
-            <div className="flex flex-wrap justify-center gap-2">
-              <button onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-600">
-                <Upload className="h-4 w-4" /> Choose image
-              </button>
-              <button onClick={() => cameraRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                <Camera className="h-4 w-4" /> Use camera
-              </button>
-            </div>
-            <p className="text-[11px] text-slate-400">JPG, PNG or WEBP · up to 10 MB</p>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={onPickFile}
+      />
+
+      {stage === "intro" && (
+        <Intro
+          mode={mode}
+          setMode={setMode}
+          onStart={openCamera}
+          onUpload={() => fileRef.current?.click()}
+        />
+      )}
+
+      {stage === "camera" && (
+        <Card className="overflow-hidden p-0">
+          <div
+            ref={mediaRef}
+            style={{ aspectRatio: camAspect }}
+            className="relative mx-auto w-full max-w-md bg-slate-900"
+          >
+            <video
+              ref={videoRef}
+              playsInline
+              muted
+              onLoadedMetadata={(e) =>
+                setCamAspect(
+                  e.currentTarget.videoWidth / e.currentTarget.videoHeight || 3 / 4
+                )
+              }
+              className="h-full w-full object-cover"
+            />
+            {mode === "coil" ? (
+              <FrameOverlay frame={frame} />
+            ) : (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-slate-900/55 px-3 py-2 text-center text-[11px] font-medium text-amber-200">
+                Keep a known reference (A4 sheet / tape) flat next to the pipe, in the same plane.
+              </div>
+            )}
+            {camError && (
+              <div className="absolute inset-0 grid place-items-center bg-slate-900/80 p-6 text-center">
+                <div className="space-y-2 text-slate-200">
+                  <AlertTriangle className="mx-auto h-8 w-8 text-amber-400" />
+                  <p className="text-sm">{camError}</p>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-between gap-3 p-4">
+            <Button variant="subtle" onClick={() => setStage("intro")}>
+              <X className="h-4 w-4" /> Cancel
+            </Button>
+            <Button onClick={capture} disabled={Boolean(camError)}>
+              <Camera className="h-4 w-4" /> Capture
+            </Button>
           </div>
         </Card>
-      ) : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Left: image + guided instruction */}
-          <Card className="space-y-3 p-4">
-            <div className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${banner.cls}`}>
-              <p className="text-sm font-medium">{banner.text}</p>
-              <span className="shrink-0 rounded-full bg-white/70 px-2.5 py-1 text-xs font-semibold">{banner.badge}</span>
-            </div>
+      )}
 
-            {!isCoil && scaleSet && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-slate-500">Wire shape:</span>
-                <div className="inline-flex rounded-lg bg-slate-100 p-1">
-                  {["straight", "curved"].map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => {
-                        setWireMode(s);
-                        setTrace([]);
-                      }}
-                      className={`rounded-md px-3 py-1.5 text-xs font-semibold capitalize transition ${
-                        wireMode === s ? "bg-white text-amber-700 shadow" : "text-slate-500"
-                      }`}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+      {stage === "measure" && captured && mode === "straight" && (
+        <StraightMeasure captured={captured} capAspect={capAspect} onRetake={retake} />
+      )}
 
-            {!isCoil && (
-              <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
-                <Info className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>
-                  Is your wire <strong>wound in loops</strong>? Trace only measures wire laid out
-                  flat. For a coil,{" "}
-                  <button onClick={() => switchMode("coil")} className="font-semibold underline">
-                    switch to Coil mode
-                  </button>
-                  .
-                </span>
-              </div>
-            )}
-
+      {stage === "measure" && captured && mode === "coil" && (
+        <div className="space-y-4">
+          <Card className="overflow-hidden p-0">
             <div
-              ref={boxRef}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerLeave={onPointerUp}
-              className="relative w-full touch-none select-none overflow-hidden rounded-xl border border-slate-200 cursor-crosshair"
+              ref={mediaRef}
+              style={{ aspectRatio: capAspect }}
+              className="relative mx-auto w-full max-w-md select-none bg-slate-900"
             >
-              <img src={image} alt="scan" draggable={false} className="block w-full" />
-              <svg className="pointer-events-none absolute inset-0 h-full w-full">
-                {calib.length === 2 && (
-                  <line x1={`${calib[0].x * 100}%`} y1={`${calib[0].y * 100}%`} x2={`${calib[1].x * 100}%`} y2={`${calib[1].y * 100}%`} stroke="#7c3aed" strokeWidth="3" />
-                )}
-                {calib.map((p, i) => (
-                  <circle key={`c${i}`} cx={`${p.x * 100}%`} cy={`${p.y * 100}%`} r="6" fill="#7c3aed" stroke="#fff" strokeWidth="2" />
-                ))}
-                {trace.slice(1).map((p, i) => (
-                  <line key={`l${i}`} x1={`${trace[i].x * 100}%`} y1={`${trace[i].y * 100}%`} x2={`${p.x * 100}%`} y2={`${p.y * 100}%`} stroke="#06b6d4" strokeWidth="3" />
-                ))}
-                {/* Coil: dashed loop circle + the diameter line you dragged */}
-                {isCoil && coilCenter && coilSpanPx > 8 && (
-                  <circle
-                    cx={`${coilCenter.x * 100}%`}
-                    cy={`${coilCenter.y * 100}%`}
-                    r={coilSpanPx / 2}
-                    fill="rgba(6,182,212,0.10)"
-                    stroke="#06b6d4"
-                    strokeWidth="2"
-                    strokeDasharray="6 5"
-                  />
-                )}
-                {isCoil && coilPts.length === 2 && (
-                  <line x1={`${coilPts[0].x * 100}%`} y1={`${coilPts[0].y * 100}%`} x2={`${coilPts[1].x * 100}%`} y2={`${coilPts[1].y * 100}%`} stroke="#0891b2" strokeWidth="3" strokeLinecap="round" />
-                )}
-              </svg>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button onClick={() => setCalib([])} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50">
-                Redraw scale
-              </button>
-              <button onClick={undo} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50">
-                <Undo2 className="h-3.5 w-3.5" /> Undo
-              </button>
-              <button onClick={clearWire} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50">
-                <RotateCcw className="h-3.5 w-3.5" /> Redraw {isCoil ? "loop" : "wire"}
-              </button>
-              <span className="text-xs text-slate-400">
-                <span className="text-violet-600">▬</span> scale&nbsp;&nbsp;
-                <span className="text-cyan-600">▬</span> {isCoil ? "loop" : "wire"}
-              </span>
-            </div>
-
-            {/* Live measured length — always visible right under the image */}
-            {scaleSet && (
-              <div className="rounded-xl bg-amber-50 px-4 py-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-amber-700/70">
-                    Measured length
-                  </span>
-                  <span className="text-2xl font-extrabold text-amber-700">
-                    {lengthM > 0 ? `${lengthM.toFixed(2)} m` : "—"}
-                    {lengthM > 0 && (
-                      <span className="ml-2 text-sm font-semibold text-amber-600/80">
-                        {lengthCm.toFixed(1)} cm
-                      </span>
-                    )}
-                  </span>
-                </div>
-                {isCoil && (
-                  <div className="mt-1 text-right text-[11px] font-medium text-amber-700/70">
-                    {coilDiaCm > 0
-                      ? `${turnsNum} turns × 22/7 × ⌀ ${coilDiaCm.toFixed(1)} cm`
-                      : "drag across one loop to set the diameter"}
+              <img
+                src={captured}
+                alt="Captured coil"
+                className="h-full w-full object-cover"
+                draggable={false}
+              />
+              <FrameOverlay frame={frame} detection={detection} />
+              {detecting && (
+                <div className="absolute inset-0 grid place-items-center bg-slate-900/40">
+                  <div className="flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-slate-700">
+                    <Spinner className="h-4 w-4" /> Detecting coil…
                   </div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </Card>
 
-          {/* Right: reference + turns + result + save */}
-          <div className="space-y-4">
-            <Card className="p-4">
-              <h3 className="flex items-center gap-2 text-sm font-bold text-slate-700">
-                <Coins className="h-4 w-4 text-amber-600" /> Reference object
-              </h3>
-              <p className="text-xs text-slate-400">Its known size sets the scale of the photo.</p>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {REFERENCES.map((r) => (
-                  <button
-                    key={r.id}
-                    onClick={() => pickRef(r.id)}
-                    className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${
-                      refId === r.id
-                        ? "border-amber-500 bg-amber-50 text-amber-700"
-                        : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    {r.label}
-                  </button>
-                ))}
-              </div>
-              <label className="mt-3 block text-xs font-semibold text-slate-500">
-                {ref.label} {ref.dimLabel} in cm
-                <input
-                  type="number" step="0.1" min="0" value={refCm}
-                  onChange={(e) => {
-                    setRefCm(e.target.value);
-                    setCalib([]);
-                  }}
-                  className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700"
-                />
-                <span className="mt-1 block text-[11px] font-normal text-slate-400">{ref.hint}</span>
-              </label>
-              {isCoil && (
-                <label className="mt-3 block text-xs font-semibold text-slate-500">
-                  Number of turns (loops) in the coil
-                  <input
-                    type="number" inputMode="numeric" min="1" step="1" value={turns}
-                    onChange={(e) => setTurns(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700"
-                  />
-                </label>
-              )}
+          {!detection && !detecting && (
+            <Card className="flex items-start gap-3 p-4">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+              <p className="text-sm text-slate-600">
+                Couldn't find a coil inside the frame. Make sure the whole coil sits inside the
+                square with good contrast against the background, then adjust sensitivity below or
+                retake.
+              </p>
             </Card>
+          )}
 
-            {lengthM > 0 ? (
-              <Card className="space-y-3 p-4">
-                <div className="rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 p-5 text-center">
-                  <div className="text-3xl font-extrabold text-amber-700">{lengthM.toFixed(2)} m</div>
-                  <div className="text-sm font-medium text-amber-600/80">{lengthCm.toFixed(1)} cm</div>
-                  <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-400">
-                    {isCoil ? `coil · ${turnsNum} turns` : wireMode} wire length
-                  </div>
-                </div>
-
-                {needsBranch && (
-                  <label className="block text-xs font-semibold text-slate-500">
-                    Branch
-                    <select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700">
-                      <option value="">Select branch…</option>
-                      {branches.map((b) => (
-                        <option key={b.id} value={b.id}>{b.name}</option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={2}
-                  placeholder="Notes (optional) — e.g. stripped from old AC units"
-                  className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
-                />
-
-                <button
-                  onClick={save}
-                  disabled={saving || lengthM <= 0}
-                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 disabled:opacity-50"
-                >
-                  <Check className="h-4 w-4" /> {saving ? "Saving…" : "Save to history"}
-                </button>
-                {isCoil && (
-                  <p className="text-[11px] text-slate-400">
-                    Coil mode is an estimate — accuracy depends on an even loop size and the turn count.
-                  </p>
-                )}
-              </Card>
-            ) : (
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-500">
-                {!scaleSet
-                  ? "Drag a line across your reference object to set the scale."
-                  : isCoil
-                  ? "Drag across one loop and enter the number of turns to see the length."
-                  : "Drag along the wire to draw its path and see the length."}
+          {/* Controls */}
+          <Card className="space-y-4 p-4">
+            <div>
+              <div className="mb-1 flex items-center justify-between text-sm font-semibold text-slate-700">
+                <span>Line sensitivity</span>
+                <span className="text-xs font-normal text-slate-400">
+                  raise it if faint loops are missed
+                </span>
               </div>
-            )}
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={sensitivity}
+                onChange={(e) => {
+                  setSensitivity(Number(e.target.value));
+                  setDetecting(true);
+                }}
+                className="w-full accent-amber-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5">
+              <div>
+                <span className="text-sm font-semibold text-slate-700">Detected turns (N)</span>
+                <p className="text-[11px] text-slate-400">Auto-counted — correct it if needed.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="subtle" onClick={() => setTurns((n) => Math.max(0, n - 1))}>−</Button>
+                <input
+                  type="number"
+                  min="0"
+                  value={turns}
+                  onChange={(e) => setTurns(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                  className="w-16 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-center text-sm font-bold text-slate-800 outline-none focus:border-amber-400"
+                />
+                <Button size="sm" variant="subtle" onClick={() => setTurns((n) => n + 1)}>+</Button>
+              </div>
+            </div>
+
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                setRedetect((n) => n + 1);
+                setDetecting(true);
+              }}
+            >
+              <RefreshCw className="h-4 w-4" /> Re-detect
+            </Button>
+          </Card>
+
+          {/* Result readout */}
+          <Card className="p-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Readout label="Detected loops" value={ready ? turns : "—"} />
+              <Readout label="Outer Ø" value={outerCm ? `${outerCm.toFixed(1)} cm` : "—"} />
+              <Readout label="Inner Ø" value={innerCm ? `${innerCm.toFixed(1)} cm` : "—"} />
+              <Readout label="Confidence" value={detection ? `${confidence}%` : "—"} />
+            </div>
+            <div className="mt-4 flex items-end justify-between rounded-xl bg-amber-50 px-4 py-3">
+              <span className="text-sm font-semibold text-amber-700">Calculated length</span>
+              <span className="text-2xl font-extrabold text-amber-700">
+                {ready ? fmtLength(lengthM) : "—"}
+              </span>
+            </div>
+          </Card>
+
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            placeholder="Notes (optional)…"
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-amber-400"
+          />
+
+          <div className="flex items-center justify-between gap-3">
+            <Button variant="subtle" onClick={retake}>
+              <RotateCcw className="h-4 w-4" /> Retake
+            </Button>
+            <Button variant="success" onClick={save} disabled={!ready || saving}>
+              <Save className="h-4 w-4" /> {saving ? "Saving…" : "Save scan"}
+            </Button>
           </div>
         </div>
       )}
+    </div>
+  );
+}
 
-      <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPickImage} />
-      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickImage} />
+// ---- Sub-components ---------------------------------------------------------
+
+function Intro({ mode, setMode, onStart, onUpload }) {
+  const isCoil = mode === "coil";
+  const steps = isCoil
+    ? [
+        "Lay the coil flat — a single layer, no stacked or hidden loops.",
+        `Place it fully inside the ${FRAME_CM} cm × ${FRAME_CM} cm frame on screen.`,
+        "Capture straight from the top, with even lighting and good contrast.",
+        "The app reads the diameters and turn count from the image automatically.",
+      ]
+    : [
+        "Lay the pipe / wire straight and flat on the floor.",
+        "Put a known reference (A4 sheet or tape) flat beside it, in the same plane.",
+        "Shoot from as high and straight-on as possible to limit perspective.",
+        "Mark the reference, then trace the wire end-to-end; length is scaled from it.",
+      ];
+  return (
+    <Card className="space-y-5 p-6">
+      {/* Measurement-type toggle */}
+      <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1">
+        {[
+          { id: "coil", label: "Flat coil", icon: CircleDot },
+          { id: "straight", label: "Straight wire", icon: Ruler },
+        ].map((m) => (
+          <button
+            key={m.id}
+            onClick={() => setMode(m.id)}
+            className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+              mode === m.id ? "bg-white text-amber-700 shadow-sm" : "text-slate-500"
+            }`}
+          >
+            <m.icon className="h-4 w-4" /> {m.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex items-start gap-3">
+        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-50 text-amber-600">
+          {isCoil ? <CircleDot className="h-6 w-6" /> : <Ruler className="h-6 w-6" />}
+        </div>
+        <div>
+          <h2 className="font-semibold text-slate-800">
+            {isCoil ? "Scan a copper coil" : "Measure a straight pipe / wire"}
+          </h2>
+          <p className="text-sm text-slate-500">
+            {isCoil
+              ? "Automatic top-view measurement using the calibration frame. Works for flat, single-layer coils."
+              : "Reference-scaled measurement. Accuracy drops on long pipes due to camera perspective — weighing is more exact."}
+          </p>
+        </div>
+      </div>
+      <ol className="space-y-2">
+        {steps.map((s, i) => (
+          <li key={i} className="flex gap-3 text-sm text-slate-600">
+            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-500">
+              {i + 1}
+            </span>
+            {s}
+          </li>
+        ))}
+      </ol>
+      <div className="flex items-start gap-2 rounded-xl bg-amber-50/70 p-3 text-xs text-amber-700">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        {isCoil
+          ? "Hidden or stacked loops can't be measured from one photo — the length below them is invisible to the camera."
+          : "Perspective distorts long pipes: the far end looks smaller than the near end, so a single scale is approximate. For an exact figure, weigh the pipe instead."}
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Button onClick={onStart} className="w-full">
+          <Camera className="h-4 w-4" /> Open camera
+        </Button>
+        <Button variant="outline" onClick={onUpload} className="w-full">
+          <Upload className="h-4 w-4" /> Upload photo
+        </Button>
+      </div>
+      <p className="text-center text-[11px] text-slate-400">
+        On a phone, “Upload photo” also lets you take a picture or pick one from your gallery.
+      </p>
+    </Card>
+  );
+}
+
+// SVG overlay: the dashed calibration frame plus, when present, the detected
+// outer / inner circles and centre.
+function FrameOverlay({ frame, detection }) {
+  const { side, x, y } = frame;
+  if (!side) return null;
+  return (
+    <svg className="pointer-events-none absolute inset-0 h-full w-full">
+      <rect
+        x={x}
+        y={y}
+        width={side}
+        height={side}
+        fill="none"
+        stroke="#fbbf24"
+        strokeWidth="2"
+        strokeDasharray="8 6"
+        rx="4"
+      />
+      <text x={x + side / 2} y={y - 8} textAnchor="middle" fontSize="12" fontWeight="700" fill="#fbbf24">
+        {FRAME_CM} cm
+      </text>
+      {detection && (
+        <>
+          <circle cx={detection.cx} cy={detection.cy} r={detection.outerR} fill="none" stroke="#f59e0b" strokeWidth="2.5" />
+          {detection.innerR > 1 && (
+            <circle cx={detection.cx} cy={detection.cy} r={detection.innerR} fill="none" stroke="#06b6d4" strokeWidth="2.5" />
+          )}
+          <circle cx={detection.cx} cy={detection.cy} r="3.5" fill="#ef4444" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+// Straight pipe / wire — reference-calibrated trace. The operator marks a
+// known-length reference (sets pixels→cm) then traces the wire end-to-end.
+function StraightMeasure({ captured, capAspect, onRetake }) {
+  const { user } = useAuth();
+  const { viewBranchId } = useInventory();
+  const { createScan } = useCopperScans();
+  const { toast } = useToast();
+
+  const [containerRef, size] = useElementSize();
+  const [refId, setRefId] = useState(REFERENCES[0].id);
+  const [refCm, setRefCm] = useState(REFERENCES[0].cm);
+  const [refUnit, setRefUnit] = useState("cm"); // cm | mm — display unit for the reference
+  const [refPts, setRefPts] = useState([]);
+  const [wirePts, setWirePts] = useState([]);
+  const [tool, setTool] = useState("ref");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  function pickRef(id) {
+    setRefId(id);
+    setRefCm(referenceById(id).cm);
+  }
+
+  function onTap(e) {
+    const r = e.currentTarget.getBoundingClientRect();
+    const p = { x: e.clientX - r.left, y: e.clientY - r.top };
+    if (tool === "ref") {
+      setRefPts((prev) => {
+        const next = prev.length >= 2 ? [p] : [...prev, p];
+        if (next.length === 2) setTool("wire");
+        return next;
+      });
+    } else {
+      setWirePts((prev) => [...prev, p]);
+    }
+  }
+
+  const refPx =
+    refPts.length === 2 ? Math.hypot(refPts[0].x - refPts[1].x, refPts[0].y - refPts[1].y) : 0;
+  const pxPerCm = refPx > 0 && refCm > 0 ? refPx / refCm : 0;
+  const wireCm = pxPerCm > 0 ? polylinePx(wirePts) / pxPerCm : 0;
+  const lengthM = wireCm / 100;
+  const ready = pxPerCm > 0 && wirePts.length >= 2;
+
+  async function save() {
+    const branchId = viewBranchId || user.branchId;
+    if (!branchId) {
+      toast("Select a branch first.", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      await createScan({
+        branchId,
+        method: "trace",
+        referenceType: refId,
+        referenceMm: refCm * 10,
+        pxPerMm: pxPerCm / 10,
+        lengthM,
+        image: captured,
+        points: { kind: "straight", ref: refPts, wire: wirePts, refCm },
+        notes: notes.trim() || null,
+      });
+      toast("Wire scan saved", "success");
+      onRetake();
+    } catch (e) {
+      toast(e.message || "Could not save the scan.", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const polyPoints = wirePts.map((p) => `${p.x},${p.y}`).join(" ");
+
+  return (
+    <div className="space-y-4">
+      <Card className="overflow-hidden p-0">
+        <div
+          ref={containerRef}
+          onClick={onTap}
+          style={{ aspectRatio: capAspect }}
+          className="relative mx-auto w-full max-w-md cursor-crosshair touch-none select-none bg-slate-900"
+        >
+          <img src={captured} alt="Captured wire" className="h-full w-full object-cover" draggable={false} />
+          <svg className="pointer-events-none absolute inset-0 h-full w-full" width={size.w} height={size.h}>
+            {/* reference */}
+            {refPts.length === 2 && (
+              <line x1={refPts[0].x} y1={refPts[0].y} x2={refPts[1].x} y2={refPts[1].y} stroke="#10b981" strokeWidth="3" />
+            )}
+            {refPts.map((p, i) => (
+              <circle key={`r${i}`} cx={p.x} cy={p.y} r="5" fill="#10b981" stroke="#fff" strokeWidth="1.5" />
+            ))}
+            {/* wire */}
+            {wirePts.length >= 2 && (
+              <polyline points={polyPoints} fill="none" stroke="#f59e0b" strokeWidth="3" strokeLinejoin="round" />
+            )}
+            {wirePts.map((p, i) => (
+              <circle key={`w${i}`} cx={p.x} cy={p.y} r="4" fill="#f59e0b" stroke="#fff" strokeWidth="1.5" />
+            ))}
+          </svg>
+        </div>
+      </Card>
+
+      {/* Reference setup */}
+      <Card className="space-y-3 p-4">
+        <div className="flex items-center gap-2">
+          <Ruler className="h-4 w-4 text-emerald-600" />
+          <span className="text-sm font-semibold text-slate-700">Reference (sets the scale)</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={refId}
+            onChange={(e) => pickRef(e.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 outline-none focus:border-emerald-400"
+          >
+            {REFERENCES.map((r) => (
+              <option key={r.id} value={r.id}>{r.label}</option>
+            ))}
+          </select>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              step={refUnit === "mm" ? "1" : "0.1"}
+              min="0"
+              value={refUnit === "mm" ? Math.round(refCm * 10 * 100) / 100 : refCm}
+              onChange={(e) => {
+                const v = Math.max(0, Number(e.target.value) || 0);
+                setRefCm(refUnit === "mm" ? v / 10 : v);
+              }}
+              className="w-20 rounded-xl border border-slate-200 bg-white px-2 py-2 text-center text-sm font-bold text-slate-800 outline-none focus:border-emerald-400"
+            />
+            <select
+              value={refUnit}
+              onChange={(e) => setRefUnit(e.target.value)}
+              className="rounded-xl border border-slate-200 bg-white px-2 py-2 text-sm font-medium text-slate-600 outline-none focus:border-emerald-400"
+            >
+              <option value="cm">cm</option>
+              <option value="mm">mm</option>
+            </select>
+          </div>
+        </div>
+        <p className="text-xs text-slate-400">{referenceById(refId).hint}</p>
+      </Card>
+
+      {/* Tool toggle + edits */}
+      <Card className="space-y-3 p-4">
+        <div className="flex items-center gap-2">
+          <ToolPill active={tool === "ref"} tone="emerald" onClick={() => setTool("ref")} done={refPts.length === 2} label={`Reference (${refPts.length}/2)`} icon={Ruler} />
+          <ToolPill active={tool === "wire"} tone="amber" onClick={() => setTool("wire")} done={wirePts.length >= 2} label={`Wire (${wirePts.length})`} icon={Cable} />
+        </div>
+        <p className="text-xs text-slate-500">
+          {tool === "ref"
+            ? "Tap the two ends of the reference object."
+            : "Tap along the wire from one end to the other — add points around any bends."}
+        </p>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => (tool === "ref" ? setRefPts([]) : setWirePts((p) => p.slice(0, -1)))}
+          >
+            <Minus className="h-3.5 w-3.5" /> {tool === "ref" ? "Clear reference" : "Undo point"}
+          </Button>
+          {tool === "wire" && (
+            <Button size="sm" variant="ghost" onClick={() => setWirePts([])}>
+              <RotateCcw className="h-3.5 w-3.5" /> Clear wire
+            </Button>
+          )}
+        </div>
+      </Card>
+
+      {/* Result */}
+      <Card className="p-4">
+        <div className="grid grid-cols-2 gap-3">
+          <Readout label="Scale" value={pxPerCm > 0 ? `${pxPerCm.toFixed(1)} px/cm` : "—"} />
+          <Readout label="Points" value={wirePts.length} />
+        </div>
+        <div className="mt-4 flex items-end justify-between rounded-xl bg-amber-50 px-4 py-3">
+          <span className="text-sm font-semibold text-amber-700">Wire length</span>
+          <span className="text-2xl font-extrabold text-amber-700">{ready ? fmtLength(lengthM) : "—"}</span>
+        </div>
+        <p className="mt-2 flex items-start gap-1.5 text-[11px] text-slate-400">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+          Approximate — camera perspective makes long, angled pipes read short or long. Weigh for an exact length.
+        </p>
+      </Card>
+
+      <textarea
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        rows={2}
+        placeholder="Notes (optional)…"
+        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-amber-400"
+      />
+
+      <div className="flex items-center justify-between gap-3">
+        <Button variant="subtle" onClick={onRetake}>
+          <RotateCcw className="h-4 w-4" /> Retake
+        </Button>
+        <Button variant="success" onClick={save} disabled={!ready || saving}>
+          <Save className="h-4 w-4" /> {saving ? "Saving…" : "Save scan"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ToolPill({ active, tone, onClick, done, label, icon: Icon }) {
+  const tones = {
+    emerald: active ? "bg-emerald-500 text-white" : "bg-emerald-50 text-emerald-700",
+    amber: active ? "bg-amber-500 text-white" : "bg-amber-50 text-amber-700",
+  };
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-bold transition ${tones[tone]}`}
+    >
+      {done ? <Check className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
+      {label}
+    </button>
+  );
+}
+
+function Readout({ label, value }) {
+  return (
+    <div className="rounded-xl bg-slate-50 px-3 py-2.5 text-center">
+      <div className="text-lg font-extrabold text-slate-800">{value}</div>
+      <div className="text-[10px] uppercase tracking-wide text-slate-400">{label}</div>
     </div>
   );
 }

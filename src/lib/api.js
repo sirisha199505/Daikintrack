@@ -230,6 +230,14 @@ export function mapCopperScanFromApi(s) {
     referenceMm: s.reference_mm,
     pxPerMm: s.px_per_mm,
     lengthM: s.length_m ?? 0,
+    method: s.method || "trace", // trace | coil | weight
+    product: s.product || null,
+    startLengthM: s.start_length_m ?? null,
+    remainingLengthM: s.remaining_length_m ?? null,
+    leftoverWeightG: s.leftover_weight_g ?? null,
+    leftoverWeightKg:
+      s.leftover_weight_g != null ? s.leftover_weight_g / 1000 : null,
+    kgPerM: s.kg_per_m ?? null,
     gaugeSystem: s.gauge_system,
     gaugeValue: s.gauge_value,
     diameterMm: s.diameter_mm,
@@ -257,6 +265,14 @@ export function mapCopperScanToApi(form) {
     reference_mm: form.referenceMm,
     px_per_mm: form.pxPerMm,
     length_m: Number(form.lengthM) || 0,
+    method: form.method || "trace",
+    product: form.product || null,
+    start_length_m: form.startLengthM != null ? Number(form.startLengthM) : null,
+    remaining_length_m:
+      form.remainingLengthM != null ? Number(form.remainingLengthM) : null,
+    leftover_weight_g:
+      form.leftoverWeightG != null ? Number(form.leftoverWeightG) : null,
+    kg_per_m: form.kgPerM != null ? Number(form.kgPerM) : null,
     gauge_system: form.gaugeSystem || "awg",
     gauge_value: form.gaugeValue != null ? String(form.gaugeValue) : null,
     diameter_mm: Number(form.diameterMm) || 0,
@@ -429,6 +445,16 @@ export const Api = {
   },
   async createCopperScan(payload) {
     const res = await apiRequest("/copper-scans", { method: "POST", body: payload });
+    return res.data;
+  },
+  // AI label scan: send a base64 label photo, get back tube specs.
+  async identifyCopperLabel(image) {
+    const res = await apiRequest("/copper-scans/identify", { method: "POST", body: { image } });
+    return res.data;
+  },
+  // AI photo estimate: send a coil photo + known full length, get remaining/used + confidence.
+  async estimateCopperCoil(payload) {
+    const res = await apiRequest("/copper-scans/estimate", { method: "POST", body: payload });
     return res.data;
   },
   async deleteCopperScan(id) {

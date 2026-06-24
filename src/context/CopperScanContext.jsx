@@ -67,6 +67,12 @@ export function CopperScanProvider({ children }) {
   // Never reject — return an empty summary if the endpoint is missing/erroring
   // (e.g. backend not yet redeployed), so the dashboard shows an empty state
   // instead of an uncaught promise rejection.
+  // AI label scan — returns tube specs read from a label photo.
+  const identifyLabel = useCallback((image) => Api.identifyCopperLabel(image), []);
+
+  // AI photo estimate — returns remaining/used length + confidence from a coil photo.
+  const estimateCoil = useCallback((payload) => Api.estimateCopperCoil(payload), []);
+
   const loadSummary = useCallback(async (params = {}) => {
     try {
       return await Api.copperSummary(params);
@@ -77,8 +83,8 @@ export function CopperScanProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({ scans, loading, error, refresh, createScan, removeScan, getScan, loadSummary }),
-    [scans, loading, error, refresh, createScan, removeScan, getScan, loadSummary]
+    () => ({ scans, loading, error, refresh, createScan, removeScan, getScan, identifyLabel, estimateCoil, loadSummary }),
+    [scans, loading, error, refresh, createScan, removeScan, getScan, identifyLabel, estimateCoil, loadSummary]
   );
 
   return (
