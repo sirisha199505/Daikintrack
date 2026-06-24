@@ -625,8 +625,8 @@ function StraightMeasure({ captured, capAspect, onRetake }) {
   const { toast } = useToast();
 
   const [containerRef, size] = useElementSize();
-  const [refId, setRefId] = useState(REFERENCES[0].id);
-  const [refCm, setRefCm] = useState(REFERENCES[0].cm);
+  const [refId, setRefId] = useState("a4"); // A4 sheet is the default backing reference
+  const [refCm, setRefCm] = useState(referenceById("a4").cm);
   const [refUnit, setRefUnit] = useState("cm"); // cm | mm — display unit for the reference
   const [refPts, setRefPts] = useState([]);
   const [wirePts, setWirePts] = useState([]);

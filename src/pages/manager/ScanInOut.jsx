@@ -200,9 +200,9 @@ export default function ScanInOut() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-stretch gap-4 sm:gap-6 lg:grid-cols-2">
         {/* Scanner panel */}
-        <Card className="p-5">
+        <Card className="flex h-full flex-col p-5">
           <div className="mb-4 flex items-center justify-between gap-2 text-slate-700">
             <div className="flex items-center gap-2">
               <ScanLine className="h-5 w-5 text-daikin-600" />
@@ -215,7 +215,7 @@ export default function ScanInOut() {
             )}
           </div>
           {locked ? (
-            <div className="flex min-h-[320px] flex-col items-center justify-center gap-4 text-center">
+            <div className="flex min-h-[320px] flex-1 flex-col items-center justify-center gap-4 text-center">
               <div className="grid h-16 w-16 place-items-center rounded-2xl bg-slate-100 text-slate-400">
                 <Lock className="h-8 w-8" />
               </div>
@@ -232,14 +232,16 @@ export default function ScanInOut() {
               </Button>
             </div>
           ) : (
-            <Scanner onResult={onResult} branchId={activeBranchId} />
+            <div className="flex flex-1 flex-col justify-center">
+              <Scanner onResult={onResult} branchId={activeBranchId} />
+            </div>
           )}
         </Card>
 
         {/* Result panel */}
-        <div>
+        <div className="h-full">
           {receipt ? (
-            <Card className="p-8">
+            <Card className="flex h-full flex-col justify-center p-8">
               <EmptyState
                 icon={CheckCircle2}
                 title={`${receipt.type === "in" ? "Checked In" : "Checked Out"} successfully`}
@@ -268,7 +270,7 @@ export default function ScanInOut() {
               onCheckOut={completeCheckOut}
             />
           ) : elsewhere ? (
-            <Card>
+            <Card className="flex h-full flex-col justify-center">
               <EmptyState
                 icon={Building2}
                 title="Product in another branch"
@@ -283,7 +285,7 @@ export default function ScanInOut() {
               />
             </Card>
           ) : notFound ? (
-            <Card>
+            <Card className="flex h-full flex-col justify-center">
               <EmptyState
                 icon={PackageX}
                 title="No Product Found"

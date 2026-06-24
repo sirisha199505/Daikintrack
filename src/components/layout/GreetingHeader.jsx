@@ -1,20 +1,8 @@
-import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { greeting, fmtTime } from "../../utils/format";
+import { greeting } from "../../utils/format";
 
 export default function GreetingHeader({ name, subtitle, badge }) {
-  const [now, setNow] = useState(new Date());
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000 * 30);
-    return () => clearInterval(t);
-  }, []);
-
-  const dateStr = now.toLocaleDateString("en-IN", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const now = new Date();
 
   return (
     <motion.div
@@ -32,14 +20,7 @@ export default function GreetingHeader({ name, subtitle, badge }) {
           <h1 className="truncate text-lg font-extrabold leading-tight sm:text-xl">{name}</h1>
           <p className="text-xs text-white/75">{subtitle}</p>
         </div>
-        {badge ? (
-          badge
-        ) : (
-          <div className="hidden items-center gap-2 self-start rounded-lg bg-white/10 px-2.5 py-1 text-white/90 ring-1 ring-white/15 sm:flex">
-            <span className="text-sm font-bold tabular-nums">{fmtTime(now)}</span>
-            <span className="text-[10px] text-white/60">{dateStr}</span>
-          </div>
-        )}
+        {badge || null}
       </div>
     </motion.div>
   );

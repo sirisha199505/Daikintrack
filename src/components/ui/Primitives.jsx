@@ -38,11 +38,18 @@ export function Button({
     ghost: "bg-transparent text-slate-600 hover:bg-slate-100",
     subtle: "bg-slate-100 text-slate-700 hover:bg-slate-200",
   };
+  // Classes that govern how the button sits inside its parent's flex/grid layout
+  // must live on the motion wrapper (the real layout child), not the inner
+  // <button>. Otherwise the wrapper stays content-width and `w-full` / `flex-1`
+  // do nothing — buttons look shrunken or fail to share a row equally.
+  const layout = (className.match(/\b(w-full|flex-1|flex-auto|grow|self-(?:auto|start|end|center|stretch))\b/g) || []).join(" ");
+  const wrapperCls = layout
+    ? classNames("flex", layout)
+    : "inline-flex";
   return (
     <motion.div
       whileTap={{ scale: 0.97 }}
-      className="inline-flex"
-      style={{ display: "inline-flex" }}
+      className={wrapperCls}
     >
       <Tag
         className={classNames(
