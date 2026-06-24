@@ -201,7 +201,9 @@ export default function ProductManager({ branchId = null, title, subtitle, readO
                     <th className="px-5 py-3.5">Product</th>
                     {!branchId && <th className="px-5 py-3.5">Branch</th>}
                     <th className="px-5 py-3.5">Category</th>
-                    <th className="px-5 py-3.5 text-right">Stock</th>
+                    <th className="px-5 py-3.5 text-right">Purchased</th>
+                    <th className="px-5 py-3.5 text-right">Sold</th>
+                    <th className="px-5 py-3.5 text-right">Available</th>
                     <th className="px-5 py-3.5">Status</th>
                     {!readOnly && <th className="px-5 py-3.5 text-right">Actions</th>}
                   </tr>
@@ -237,8 +239,14 @@ export default function ProductManager({ branchId = null, title, subtitle, readO
                         <td className="px-5 py-3.5 text-slate-600">
                           {p.categoryName}
                         </td>
+                        <td className="px-5 py-3.5 text-right tabular-nums text-slate-500">
+                          {num(p.purchasedQty)}
+                        </td>
+                        <td className="px-5 py-3.5 text-right tabular-nums text-slate-500">
+                          {num(p.soldQty)}
+                        </td>
                         <td className="px-5 py-3.5 text-right font-bold text-slate-800">
-                          {num(p.stock)}
+                          {num(p.availableQty ?? p.stock)}
                         </td>
                         <td className="px-5 py-3.5">
                           <Badge tone={s.tone}>{s.label}</Badge>
@@ -291,14 +299,23 @@ export default function ProductManager({ branchId = null, title, subtitle, readO
                     </div>
                     <Badge tone={s.tone}>{s.label}</Badge>
                   </div>
-                  <div className="mt-3 flex items-center justify-between text-sm">
-                    <span className="text-slate-500">
-                      {p.categoryName}
-                      {!branchId ? ` · ${branchName(p.branchId)}` : ""}
-                    </span>
-                    <span className="font-bold text-slate-800">
-                      {num(p.stock)} units
-                    </span>
+                  <div className="mt-2 text-xs text-slate-400">
+                    {p.categoryName}
+                    {!branchId ? ` · ${branchName(p.branchId)}` : ""}
+                  </div>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-lg bg-slate-50 py-2">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Purchased</div>
+                      <div className="text-sm font-bold text-slate-700">{num(p.purchasedQty)}</div>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 py-2">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Sold</div>
+                      <div className="text-sm font-bold text-slate-700">{num(p.soldQty)}</div>
+                    </div>
+                    <div className="rounded-lg bg-daikin-50 py-2">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-daikin-500">Available</div>
+                      <div className="text-sm font-bold text-daikin-700">{num(p.availableQty ?? p.stock)}</div>
+                    </div>
                   </div>
                   {!readOnly && (
                     <div className="mt-3 flex gap-2">

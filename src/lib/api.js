@@ -305,6 +305,94 @@ export function mapCategoryToApi(form) {
   return payload;
 }
 
+// ---- Inventory (Tally-style) mappers -------------------------------------
+function slugFor(branchId) {
+  if (branchId == null) return null;
+  const { idToSlug } = branchMap();
+  return idToSlug[branchId] ?? branchId;
+}
+function idFor(slug) {
+  if (slug == null) return null;
+  const { slugToId } = branchMap();
+  return slugToId[slug] ?? (Number.isFinite(+slug) ? +slug : null);
+}
+
+export function mapSupplierFromApi(s) {
+  if (!s) return null;
+  return {
+    id: s.id, name: s.name, code: s.code || "", gstin: s.gstin || "",
+    contact: s.contact || "", email: s.email || "", phone: s.phone || "",
+    address: s.address || "", branchId: slugFor(s.branch_id), branchName: s.branch_name,
+    active: s.active !== false, createdAt: s.created_at, updatedAt: s.updated_at,
+  };
+}
+export function mapPartyToApi(form) {
+  const payload = {
+    name: (form.name || "").trim(), code: (form.code || "").trim(),
+    gstin: (form.gstin || "").trim(), contact: (form.contact || "").trim(),
+    email: (form.email || "").trim(), phone: (form.phone || "").trim(),
+    address: form.address || "", active: form.active !== false,
+  };
+  if (form.branchId != null) payload.branch_id = idFor(form.branchId);
+  return payload;
+}
+// Customers share the same shape as suppliers.
+export const mapCustomerFromApi = mapSupplierFromApi;
+
+export function mapSerialFromApi(u) {
+  if (!u) return null;
+  return {
+    id: u.id, serialNo: u.serial_no, productId: u.product_id,
+    productName: u.product_name, barcode: u.barcode, categoryName: u.category_name,
+    branchId: slugFor(u.branch_id), branchName: u.branch_name, status: u.status,
+    costPrice: u.cost_price ?? 0, soldPrice: u.sold_price ?? null,
+    supplierName: u.supplier_name, customerName: u.customer_name,
+    purchaseInvoiceId: u.purchase_invoice_id, salesInvoiceId: u.sales_invoice_id,
+    purchasedAt: u.purchased_at, soldAt: u.sold_at,
+    returnReason: u.return_reason, inspectionNotes: u.inspection_notes,
+    disposedBy: u.disposed_by, createdAt: u.created_at,
+  };
+}
+
+function mapInvoiceLineFromApi(l) {
+  return {
+    id: l.id, productId: l.product_id, productName: l.product_name, barcode: l.barcode,
+    quantity: l.quantity, price: l.cost_price ?? l.sold_price ?? 0, amount: l.line_total ?? 0,
+    serials: (l.serials || []).map((s) => ({ id: s.id, serialNo: s.serial_no, status: s.status })),
+  };
+}
+export function mapPurchaseFromApi(p) {
+  if (!p) return null;
+  return {
+    id: p.id, invoiceNo: p.invoice_no, supplierInvoiceNo: p.supplier_invoice_no,
+    supplierId: p.supplier_id, supplierName: p.supplier_name,
+    branchId: slugFor(p.branch_id), branchName: p.branch_name, status: p.status,
+    totalQty: p.total_qty ?? 0, totalAmount: p.total_amount ?? 0, notes: p.notes,
+    actor: p.actor, date: p.occurred_at, lineCount: p.line_count, unitCount: p.unit_count,
+    lines: (p.items || []).map(mapInvoiceLineFromApi),
+  };
+}
+export function mapSaleFromApi(s) {
+  if (!s) return null;
+  return {
+    id: s.id, invoiceNo: s.invoice_no, customerId: s.customer_id, customerName: s.customer_name,
+    branchId: slugFor(s.branch_id), branchName: s.branch_name, status: s.status,
+    totalQty: s.total_qty ?? 0, totalAmount: s.total_amount ?? 0, notes: s.notes,
+    actor: s.actor, date: s.occurred_at, lineCount: s.line_count, unitCount: s.unit_count,
+    lines: (s.items || []).map(mapInvoiceLineFromApi),
+  };
+}
+export function mapLedgerFromApi(e) {
+  if (!e) return null;
+  return {
+    id: e.id, movementType: e.movement_type, productId: e.product_id, productName: e.product_name,
+    serialNo: e.serial_no, qty: e.qty, fromStatus: e.from_status, toStatus: e.to_status,
+    invoiceNo: e.invoice_no, partyName: e.party_name, branchId: slugFor(e.branch_id),
+    branchName: e.branch_name, balanceAfter: e.balance_after, unitPrice: e.unit_price,
+    actor: e.actor, date: e.occurred_at,
+  };
+}
+
 // ---- Endpoints -----------------------------------------------------------
 export const Api = {
   // Public counts for the login screen (no auth required).
@@ -468,5 +556,156 @@ export const Api = {
     if (params.gaugeSystem) q.set("gauge_system", params.gaugeSystem);
     const res = await apiRequest(`/copper-scans/summary?${q.toString()}`);
     return res.data || {};
+  },
+
+  // ---- Tally-style inventory: suppliers & customers (master data) ----
+  async listSuppliers({ search } = {}) {
+    const q = new URLSearchParams({ page_size: "300" });
+    if (search) q.set("search", search);
+    const res = await apiRequest(`/suppliers?${q.toString()}`);
+    return res.data || [];
+  },
+  async createSupplier(payload) {
+    const res = await apiRequest("/suppliers", { method: "POST", body: payload });
+    return res.data;
+  },
+  async updateSupplier(id, payload) {
+    const res = await apiRequest(`/suppliers/${id}`, { method: "PUT", body: payload });
+    return res.data;
+  },
+  async deleteSupplier(id) {
+    await apiRequest(`/suppliers/${id}`, { method: "DELETE" });
+  },
+  async listCustomers({ search } = {}) {
+    const q = new URLSearchParams({ page_size: "300" });
+    if (search) q.set("search", search);
+    const res = await apiRequest(`/customers?${q.toString()}`);
+    return res.data || [];
+  },
+  async createCustomer(payload) {
+    const res = await apiRequest("/customers", { method: "POST", body: payload });
+    return res.data;
+  },
+  async updateCustomer(id, payload) {
+    const res = await apiRequest(`/customers/${id}`, { method: "PUT", body: payload });
+    return res.data;
+  },
+  async deleteCustomer(id) {
+    await apiRequest(`/customers/${id}`, { method: "DELETE" });
+  },
+
+  // ---- Purchase invoices (Check-In) ----
+  async listPurchases({ branchId, search, from, to } = {}) {
+    const q = new URLSearchParams({ page_size: "300" });
+    if (branchId != null) q.set("branch_id", branchId);
+    if (search) q.set("search", search);
+    if (from) q.set("from", from);
+    if (to) q.set("to", to);
+    const res = await apiRequest(`/purchases?${q.toString()}`);
+    return res.data || [];
+  },
+  async getPurchase(id) {
+    const res = await apiRequest(`/purchases/${id}`);
+    return res.data;
+  },
+  async createPurchase(payload) {
+    const res = await apiRequest("/purchases", { method: "POST", body: payload });
+    return res.data;
+  },
+
+  // ---- Sales invoices (Check-Out) ----
+  async listSales({ branchId, search, from, to } = {}) {
+    const q = new URLSearchParams({ page_size: "300" });
+    if (branchId != null) q.set("branch_id", branchId);
+    if (search) q.set("search", search);
+    if (from) q.set("from", from);
+    if (to) q.set("to", to);
+    const res = await apiRequest(`/sales?${q.toString()}`);
+    return res.data || [];
+  },
+  async getSale(id) {
+    const res = await apiRequest(`/sales/${id}`);
+    return res.data;
+  },
+  async createSale(payload) {
+    const res = await apiRequest("/sales", { method: "POST", body: payload });
+    return res.data;
+  },
+
+  // ---- Returns / quarantine / replacements ----
+  async createReturn(payload) {
+    const res = await apiRequest("/returns", { method: "POST", body: payload });
+    return res.data;
+  },
+  async createReplacement(payload) {
+    const res = await apiRequest("/replacements", { method: "POST", body: payload });
+    return res.data;
+  },
+  async unitInspect(id, payload) {
+    const res = await apiRequest(`/units/${id}/inspect`, { method: "POST", body: payload });
+    return res.data;
+  },
+  async unitDispose(id, payload) {
+    const res = await apiRequest(`/units/${id}/dispose`, { method: "POST", body: payload });
+    return res.data;
+  },
+  async unitRepairComplete(id, payload) {
+    const res = await apiRequest(`/units/${id}/repair-complete`, { method: "POST", body: payload });
+    return res.data;
+  },
+
+  // ---- Units (serials) ----
+  async listUnits({ branchId, productId, status, quarantine, search } = {}) {
+    const q = new URLSearchParams({ page_size: "300" });
+    if (branchId != null) q.set("branch_id", branchId);
+    if (productId != null) q.set("product_id", productId);
+    if (status) q.set("status", status);
+    if (quarantine) q.set("quarantine", "1");
+    if (search) q.set("search", search);
+    const res = await apiRequest(`/units?${q.toString()}`);
+    return res.data || [];
+  },
+  async getUnitBySerial(serialNo) {
+    const res = await apiRequest(`/units/by-serial?serial_no=${encodeURIComponent(serialNo)}`);
+    return res.data;
+  },
+
+  // ---- Ledger ----
+  async listLedger({ branchId, type, from, to, search, page } = {}) {
+    const q = new URLSearchParams({ page_size: "300" });
+    if (branchId != null) q.set("branch_id", branchId);
+    if (type) q.set("type", type);
+    if (from) q.set("from", from);
+    if (to) q.set("to", to);
+    if (search) q.set("search", search);
+    if (page) q.set("page", page);
+    const res = await apiRequest(`/ledger?${q.toString()}`);
+    return res.data || [];
+  },
+
+  // ---- Universal search + product history ----
+  async searchInventory({ q, type } = {}) {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (type) params.set("type", type);
+    const res = await apiRequest(`/inventory/search?${params.toString()}`);
+    return res.data || {};
+  },
+  async productHistory({ serialNo, productId } = {}) {
+    const params = new URLSearchParams();
+    if (serialNo) params.set("serial_no", serialNo);
+    if (productId != null) params.set("product_id", productId);
+    const res = await apiRequest(`/product-history?${params.toString()}`);
+    return res.data || {};
+  },
+
+  // ---- Reports (return { data, totals }) ----
+  async report(name, params = {}) {
+    const q = new URLSearchParams({ page_size: "300" });
+    Object.entries(params).forEach(([k, v]) => {
+      if (v != null && v !== "") q.set(k.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`), v);
+    });
+    const res = await apiRequest(`/reports/${name}?${q.toString()}`);
+    return { data: res.data || [], totals: res.totals || null, total: res.total };
   },
 };

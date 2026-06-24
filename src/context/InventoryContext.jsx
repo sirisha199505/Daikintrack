@@ -69,6 +69,11 @@ export function InventoryProvider({ children }) {
         lowStockThreshold: p.low_stock_threshold ?? 10,
         price: p.price ?? 0, // whole rupees
         barcode: p.barcode,
+        // Tally-style lifecycle counters (available = sellable balance).
+        availableQty: p.available_qty ?? p.stock ?? 0,
+        purchasedQty: p.purchased_qty ?? 0,
+        soldQty: p.sold_qty ?? 0,
+        returnedQty: p.returned_qty ?? 0,
         updatedAt: p.updated_at,
       };
     },

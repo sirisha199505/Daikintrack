@@ -122,3 +122,23 @@ body {
 .scanline {
   animation: scanline 1.8s ease-in-out infinite alternate;
 }
+
+/* Print: drop the app chrome so reports print as clean Tally-style sheets. */
+@media print {
+  header,
+  nav,
+  aside,
+  .print\:hidden {
+    display: none !important;
+  }
+  body,
+  #root,
+  main {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  table {
+    font-size: 11px;
+  }
+}

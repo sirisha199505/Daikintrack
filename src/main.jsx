@@ -6,6 +6,9 @@ import App from "./App.jsx";
 import { AdminProvider } from "./context/AdminContext";
 import { AuthProvider } from "./context/AuthContext";
 import { InventoryProvider } from "./context/InventoryContext";
+import { PartyProvider } from "./context/PartyContext";
+import { InvoiceProvider } from "./context/InvoiceContext";
+import { ReportsProvider } from "./context/ReportsContext";
 import { CopperScanProvider } from "./context/CopperScanContext";
 import { ToastProvider } from "./components/ui/Toast";
 
@@ -15,11 +18,17 @@ createRoot(document.getElementById("root")).render(
       <AuthProvider>
         <AdminProvider>
           <InventoryProvider>
-            <CopperScanProvider>
-              <ToastProvider>
-                <App />
-              </ToastProvider>
-            </CopperScanProvider>
+            <PartyProvider>
+              <InvoiceProvider>
+                <ReportsProvider>
+                  <CopperScanProvider>
+                    <ToastProvider>
+                      <App />
+                    </ToastProvider>
+                  </CopperScanProvider>
+                </ReportsProvider>
+              </InvoiceProvider>
+            </PartyProvider>
           </InventoryProvider>
         </AdminProvider>
       </AuthProvider>

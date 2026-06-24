@@ -7,6 +7,7 @@ import { useInventory } from "../../context/InventoryContext";
 import { roleLabel } from "../../utils/format";
 import Sidebar from "./Sidebar";
 import BottomNav from "./BottomNav";
+import GlobalSearch from "../search/GlobalSearch";
 import logo from "/DAIKIN_logo.PNG";
 
 export default function AppLayout() {
@@ -58,6 +59,7 @@ export default function AppLayout() {
         </div>
 
         <div className="relative flex items-center gap-2 sm:gap-3">
+          <GlobalSearch />
           <button
             onClick={() => setProfileOpen((o) => !o)}
             className="flex items-center gap-2.5 rounded-full bg-white/10 py-1.5 pl-1.5 pr-2.5 ring-1 ring-white/15 hover:bg-white/20 cursor-pointer"

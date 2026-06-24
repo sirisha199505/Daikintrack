@@ -17,6 +17,15 @@ import ManageStock from "./pages/manager/ManageStock";
 import ManagerHistory from "./pages/manager/ManagerHistory";
 import RecentScans from "./pages/manager/RecentScans";
 
+import Suppliers from "./pages/admin/Suppliers";
+import Customers from "./pages/admin/Customers";
+import PurchaseInvoices from "./pages/manager/PurchaseInvoices";
+import SalesInvoices from "./pages/manager/SalesInvoices";
+import InventoryLedger from "./pages/manager/InventoryLedger";
+import Quarantine from "./pages/manager/Quarantine";
+import ProductHistory from "./pages/manager/ProductHistory";
+import Reports from "./pages/distributor/Reports";
+
 import CopperScan from "./pages/copper/CopperScan";
 import CopperHistory from "./pages/copper/CopperHistory";
 import CopperDashboard from "./pages/copper/CopperDashboard";
@@ -139,6 +148,16 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* ===== Tally-style inventory ===== */}
+        <Route path="suppliers" element={<ProtectedRoute roles={["admin", "store_manager"]}><Suppliers /></ProtectedRoute>} />
+        <Route path="customers" element={<ProtectedRoute roles={["admin", "store_manager"]}><Customers /></ProtectedRoute>} />
+        <Route path="purchase-invoices" element={<ProtectedRoute roles={["admin", "store_manager"]}><PurchaseInvoices /></ProtectedRoute>} />
+        <Route path="sales-invoices" element={<ProtectedRoute roles={["admin", "store_manager"]}><SalesInvoices /></ProtectedRoute>} />
+        <Route path="quarantine" element={<ProtectedRoute roles={["admin", "store_manager"]}><Quarantine /></ProtectedRoute>} />
+        <Route path="ledger" element={<ProtectedRoute roles={["admin", "store_manager", "distributor"]}><InventoryLedger /></ProtectedRoute>} />
+        <Route path="product-history" element={<ProtectedRoute roles={["admin", "store_manager", "distributor"]}><ProductHistory /></ProtectedRoute>} />
+        <Route path="reports" element={<ProtectedRoute roles={["admin", "distributor"]}><Reports /></ProtectedRoute>} />
 
         {/* History — Store Manager (check-outs) & Distributor (full history) */}
         <Route
