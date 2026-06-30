@@ -225,9 +225,6 @@ export default function ProductManager({ branchId = null, title, subtitle, readO
                               <div className="font-semibold text-slate-700">
                                 {p.name}
                               </div>
-                              <div className="text-xs text-slate-400">
-                                {inr(p.price)}
-                              </div>
                             </div>
                           </div>
                         </td>
