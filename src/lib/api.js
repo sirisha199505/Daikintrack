@@ -84,7 +84,11 @@ export async function apiRequest(path, { method = "GET", body, auth = true } = {
   }
 
   if (res.status === 401) {
-    setToken(null);
+    // Do NOT clear the token here. A single 401 from a background request that
+    // raced ahead of the session being ready would otherwise wipe the shared
+    // token and cascade EVERY subsequent request into 401 (including writes like
+    // POST /purchases). Session invalidation is owned by AuthContext, which
+    // clears the token only after a *verified* failure of the /me check.
     throw new ApiError(extractError(json) || "Session expired. Please log in again.", 401, json);
   }
   if (!res.ok || (json && json.status && json.status !== "success")) {

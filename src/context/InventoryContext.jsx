@@ -177,7 +177,10 @@ export function InventoryProvider({ children }) {
 
   // ---- Reads (over loaded state) ------------------------------------------
   const findByBarcode = useCallback(
-    (code) => products.find((p) => p.barcode === String(code).trim()) || null,
+    (code) => {
+      const key = String(code).trim().toUpperCase();
+      return products.find((p) => String(p.barcode || "").trim().toUpperCase() === key) || null;
+    },
     [products]
   );
 

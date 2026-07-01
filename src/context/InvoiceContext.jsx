@@ -16,6 +16,22 @@ import {
 
 const InvoiceContext = createContext(null);
 
+// Normalize the Check-In/Out product-detail rows before posting: drop fully
+// empty rows, trim strings, coerce capacity to a number when present. Returns
+// undefined when there's nothing to send.
+function cleanProductDetails(entries) {
+  const rows = (entries || [])
+    .map((e) => ({
+      model: (e.model || "").trim(),
+      category: (e.category || "").trim(),
+      type: (e.type || "").trim(),
+      capacity: e.capacity === "" || e.capacity == null ? null : Number(e.capacity),
+      unit: (e.unit || "").trim(),
+    }))
+    .filter((e) => e.model || e.category || e.type || e.capacity != null || e.unit);
+  return rows.length ? rows : undefined;
+}
+
 // Purchase + Sales invoices, returns and replacements. Posting changes stock
 // server-side, so each posting refreshes the InventoryContext product list.
 export function InvoiceProvider({ children }) {
@@ -67,13 +83,15 @@ export function InvoiceProvider({ children }) {
         supplier_invoice_no: form.supplierInvoiceNo || undefined,
         branch_id: form.branchId ?? undefined,
         notes: form.notes || undefined,
+        product_details: cleanProductDetails(form.productDetails),
         items: (form.lines || []).map((l) => ({
           product_id: l.productId, quantity: l.quantity, cost_price: l.price,
         })),
       };
       const created = mapPurchaseFromApi(await Api.createPurchase(payload));
       setPurchases((prev) => [created, ...prev]);
-      await refreshProducts();
+      // Refresh stock in the background so the modal can close immediately.
+      refreshProducts();
       return created;
     },
     [refreshProducts]
@@ -87,6 +105,7 @@ export function InvoiceProvider({ children }) {
         invoice_no: form.invoiceNo || undefined,
         branch_id: form.branchId ?? undefined,
         notes: form.notes || undefined,
+        product_details: cleanProductDetails(form.productDetails),
         items: (form.lines || []).map((l) => ({
           product_id: l.productId, quantity: l.quantity, sold_price: l.price,
           serial_nos: l.serialNos && l.serialNos.length ? l.serialNos : undefined,
@@ -94,7 +113,8 @@ export function InvoiceProvider({ children }) {
       };
       const created = mapSaleFromApi(await Api.createSale(payload));
       setSales((prev) => [created, ...prev]);
-      await refreshProducts();
+      // Refresh stock in the background so the modal can close immediately.
+      refreshProducts();
       return created;
     },
     [refreshProducts]

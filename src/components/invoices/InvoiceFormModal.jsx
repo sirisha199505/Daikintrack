@@ -3,6 +3,8 @@ import { ScanLine, X, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import Modal from "../ui/Modal";
 import { Button } from "../ui/Primitives";
 import Scanner from "../scan/Scanner";
+import ProductFields from "../scan/ProductFields";
+import { lookupModel } from "../../lib/daikinMapping";
 import LineItemEditor from "./LineItemEditor";
 import { useParties } from "../../context/PartyContext";
 import { useInventory } from "../../context/InventoryContext";
@@ -12,6 +14,8 @@ import { useToast } from "../ui/Toast";
 
 const inputCls =
   "w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm outline-none focus:border-daikin-400 focus:bg-white focus:ring-2 focus:ring-daikin-100";
+
+const EMPTY_DETAIL = { model: "", category: "", type: "", capacity: "", unit: "" };
 
 // Create a purchase (Check-In) or sales (Check-Out) invoice. Supports manual
 // line entry and scan-to-add-line.
@@ -30,11 +34,14 @@ export default function InvoiceFormModal({ open, onClose, mode = "purchase", onP
   const [lines, setLines] = useState([]);
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [productEntries, setProductEntries] = useState([]);
+  const [productDraft, setProductDraft] = useState(EMPTY_DETAIL);
 
   useEffect(() => {
     if (open) {
       /* eslint-disable react-hooks/set-state-in-effect */
       setPartyId(""); setInvoiceNo(""); setSupplierInvoiceNo(""); setNotes(""); setLines([]); setScanning(autoScan);
+      setProductEntries([]); setProductDraft(EMPTY_DETAIL);
       /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [open, mode, autoScan]);
@@ -44,11 +51,34 @@ export default function InvoiceFormModal({ open, onClose, mode = "purchase", onP
   // Sale lines are limited to products that currently have stock.
   const sellable = isSale ? products.filter((p) => (p.availableQty ?? 0) > 0) : products;
 
-  function addScanned(code) {
+  // Auto-fill & auto-save the product-detail row for a scanned/typed Model No.
+  // Deduped by model — scanning the same model again won't add a duplicate row
+  // (the operator can still edit it below).
+  function autoSaveDetail(code) {
+    const hit = lookupModel(code);
+    if (!hit) return false;
+    setProductEntries((prev) => {
+      if (prev.some((e) => (e.model || "").toUpperCase() === hit.model.toUpperCase())) return prev;
+      return [...prev, {
+        model: hit.model,
+        category: hit.category,
+        type: hit.type,
+        capacity: hit.capacity == null ? "" : String(hit.capacity),
+        unit: hit.unit || "",
+      }];
+    });
+    toast(`Auto-filled ${hit.model} — ${hit.type}`, "success");
+    return true;
+  }
+
+  // Find the matching catalog product for a code and add/increment its line.
+  // `silent` suppresses the "no product" warning (used when the code came from
+  // typing a Model No, where the detail auto-fill is the primary action).
+  function addProductLine(code, { silent = false } = {}) {
     const p = findByBarcode(code);
     const resolve = p ? Promise.resolve(p) : lookupByBarcode(code).catch(() => null);
     Promise.resolve(resolve).then((prod) => {
-      if (!prod) return toast(`No product for ${code}`, "error");
+      if (!prod) return silent ? undefined : toast(`No product for ${code}`, "error");
       if (isSale && (prod.availableQty ?? 0) <= 0) return toast(`${prod.name} is out of stock`, "error");
       setLines((prev) => {
         const idx = prev.findIndex((l) => String(l.productId) === String(prod.id));
@@ -58,10 +88,52 @@ export default function InvoiceFormModal({ open, onClose, mode = "purchase", onP
           copy[idx] = { ...copy[idx], quantity: Math.min(cap, (copy[idx].quantity || 0) + 1) };
           return copy;
         }
-        return [...prev, { productId: prod.id, productName: prod.name, quantity: 1, price: prod.price, maxQty: isSale ? prod.availableQty ?? 0 : 0 }];
+        return [...prev, { productId: prod.id, productName: prod.name, barcode: prod.barcode, quantity: 1, price: prod.price, maxQty: isSale ? prod.availableQty ?? 0 : 0 }];
       });
       toast(`Added ${prod.name}`, "success");
     });
+  }
+
+  // Scanner / manual-code path: auto-fill the details AND add the product line.
+  function addScanned(code) {
+    autoSaveDetail(code);
+    addProductLine(code);
+  }
+
+  // Model No picked in the Product Details fields → also pull in the product
+  // line automatically (quietly if there's no matching catalog product).
+  function handleModelPicked(model) {
+    if (model) addProductLine(model, { silent: true });
+  }
+
+  // A product picked in a line-item dropdown → auto-fill the Product Details
+  // above from that product's Model No (barcode).
+  function handleLineProductPicked(prod) {
+    const hit = prod && lookupModel(prod.barcode);
+    if (!hit) return;
+    setProductDraft({
+      model: hit.model,
+      category: hit.category,
+      type: hit.type,
+      capacity: hit.capacity == null ? "" : String(hit.capacity),
+      unit: hit.unit || "",
+    });
+  }
+
+  // The Product Details the operator entered — saved rows plus the current
+  // (unsaved) draft — as normalized Model Nos.
+  function detailModels() {
+    return [...productEntries.map((e) => e.model), productDraft.model]
+      .map((m) => String(m || "").trim().toUpperCase())
+      .filter(Boolean);
+  }
+
+  // Every Model No in the Product Details must match a selected product.
+  function mismatchedModel(validLines) {
+    const barcodes = validLines
+      .map((l) => String(l.barcode || "").trim().toUpperCase())
+      .filter(Boolean);
+    return detailModels().find((m) => !barcodes.includes(m)) || null;
   }
 
   async function submit() {
@@ -71,12 +143,20 @@ export default function InvoiceFormModal({ open, onClose, mode = "purchase", onP
     if (isSale && valid.some((l) => (l.quantity || 0) > (l.maxQty ?? Infinity))) {
       return toast("A line exceeds available stock", "error");
     }
+    const badModel = mismatchedModel(valid);
+    if (badModel) {
+      return toast(`Product Details "${badModel}" don't match the selected product. Fix the details or the product line.`, "error");
+    }
+    // Include the unsaved draft row too, so a filled-but-not-"Saved" detail
+    // still persists with the invoice.
+    const draftFilled = productDraft.model || productDraft.category || productDraft.type || productDraft.capacity || productDraft.unit;
+    const details = draftFilled ? [...productEntries, productDraft] : productEntries;
     setSaving(true);
     try {
       if (isSale) {
-        await createSale({ customerId: Number(partyId), invoiceNo, branchId, notes, lines: valid });
+        await createSale({ customerId: Number(partyId), invoiceNo, branchId, notes, lines: valid, productDetails: details });
       } else {
-        await createPurchase({ supplierId: Number(partyId), invoiceNo, supplierInvoiceNo, branchId, notes, lines: valid });
+        await createPurchase({ supplierId: Number(partyId), invoiceNo, supplierInvoiceNo, branchId, notes, lines: valid, productDetails: details });
       }
       toast(`${isSale ? "Sale" : "Purchase"} posted`, "success");
       onPosted?.();
@@ -132,7 +212,10 @@ export default function InvoiceFormModal({ open, onClose, mode = "purchase", onP
               <Scanner onResult={(code) => addScanned(code)} />
             </div>
           )}
-          <LineItemEditor mode={mode} lines={lines} setLines={setLines} products={sellable} />
+          <ProductFields draft={productDraft} onDraftChange={setProductDraft} entries={productEntries} onEntriesChange={setProductEntries} onModelPicked={handleModelPicked} />
+          <div className="mt-4">
+            <LineItemEditor mode={mode} lines={lines} setLines={setLines} products={sellable} onProductPicked={handleLineProductPicked} />
+          </div>
         </div>
 
         <label className="block">
@@ -143,7 +226,7 @@ export default function InvoiceFormModal({ open, onClose, mode = "purchase", onP
         <div className="flex justify-end gap-3">
           <Button type="button" variant="subtle" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button type="button" variant={isSale ? "danger" : "primary"} onClick={submit} disabled={saving}>
-            {saving ? "Posting…" : isSale ? "Post Sale" : "Post Purchase"}
+            {saving ? "Confirming…" : isSale ? "Confirm Sale" : "Confirm Purchase"}
           </Button>
         </div>
       </div>

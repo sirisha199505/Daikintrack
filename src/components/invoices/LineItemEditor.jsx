@@ -7,7 +7,7 @@ const inputCls =
 
 // Editable list of invoice line items. `mode` = 'purchase' | 'sale'.
 // In sale mode quantities are capped to each product's available stock.
-export default function LineItemEditor({ mode, lines, setLines, products }) {
+export default function LineItemEditor({ mode, lines, setLines, products, onProductPicked }) {
   const isSale = mode === "sale";
 
   const setLine = (i, patch) =>
@@ -21,9 +21,11 @@ export default function LineItemEditor({ mode, lines, setLines, products }) {
     setLine(i, {
       productId: p ? p.id : "",
       productName: p?.name,
+      barcode: p?.barcode,
       price: p ? (isSale ? p.price : p.price) : 0,
       maxQty: isSale ? p?.availableQty ?? 0 : 0,
     });
+    if (p) onProductPicked?.(p);
   }
 
   const total = lines.reduce((s, l) => s + (l.quantity || 0) * (l.price || 0), 0);
