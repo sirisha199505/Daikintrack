@@ -129,7 +129,7 @@ export default function InvoiceFormModal({ open, onClose, mode = "purchase", onP
           </div>
           {scanning && (
             <div className="mb-4 rounded-xl border border-slate-200 p-3">
-              <Scanner onResult={(code) => addScanned(code)} branchId={branchId} />
+              <Scanner onResult={(code) => addScanned(code)} />
             </div>
           )}
           <LineItemEditor mode={mode} lines={lines} setLines={setLines} products={sellable} />

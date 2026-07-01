@@ -9,7 +9,6 @@ import {
   QrCode,
 } from "lucide-react";
 import { Button } from "../ui/Primitives";
-import { useInventory } from "../../context/InventoryContext";
 
 const MODES = [
   { id: "camera", label: "Scan Code", icon: ScanLine },
@@ -45,7 +44,7 @@ function stopScanner(inst) {
   }
 }
 
-export default function Scanner({ onResult, branchId }) {
+export default function Scanner({ onResult }) {
   const [mode, setMode] = useState("camera");
   const [manual, setManual] = useState("");
   const [camError, setCamError] = useState("");
@@ -53,12 +52,6 @@ export default function Scanner({ onResult, branchId }) {
   const scannerRef = useRef(null);
   const lockedRef = useRef(false);
   const regionId = "daikin-scan-region";
-  const { products } = useInventory();
-
-  // Sample codes (scoped to branch when provided) for one-tap demo scanning.
-  const samples = products
-    .filter((p) => (branchId ? p.branchId === branchId : true))
-    .slice(0, 4);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,9 +91,7 @@ export default function Scanner({ onResult, branchId }) {
         if (!cancelled) setScanning(true);
       } catch {
         if (!cancelled)
-          setCamError(
-            "Camera unavailable. Use manual entry or tap a sample below."
-          );
+          setCamError("Camera unavailable. Use manual entry.");
       }
     }
     start();
@@ -207,27 +198,6 @@ export default function Scanner({ onResult, branchId }) {
             <Search className="h-4 w-4" /> Look up product
           </Button>
         </form>
-      )}
-
-      {/* Sample quick-pick */}
-      {samples.length > 0 && (
-        <div>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">
-            Demo codes
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {samples.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => handle(p.barcode)}
-                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-mono text-slate-600 hover:border-daikin-300 hover:bg-daikin-50 cursor-pointer"
-                title={p.name}
-              >
-                {p.barcode}
-              </button>
-            ))}
-          </div>
-        </div>
       )}
     </div>
   );

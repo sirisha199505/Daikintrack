@@ -9,7 +9,7 @@ import { useInventory } from "../../context/InventoryContext";
 import { useToast } from "../ui/Toast";
 
 // Self-contained scan → product → movement flow inside a modal.
-export default function ScanFlowModal({ open, onClose, branchId }) {
+export default function ScanFlowModal({ open, onClose }) {
   const { findByBarcode } = useInventory();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -67,7 +67,7 @@ export default function ScanFlowModal({ open, onClose, branchId }) {
             }
           />
         ) : (
-          <Scanner onResult={onResult} branchId={branchId} />
+          <Scanner onResult={onResult} />
         )}
       </div>
     </Modal>
