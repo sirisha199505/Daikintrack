@@ -3,6 +3,7 @@ import Modal from "../ui/Modal";
 import { Button } from "../ui/Primitives";
 import { useInventory } from "../../context/InventoryContext";
 import { useToast } from "../ui/Toast";
+import { MODEL_NOS } from "../../lib/daikinMapping";
 
 const EMPTY = {
   name: "",
@@ -10,6 +11,11 @@ const EMPTY = {
   branchId: "",
   stock: 0,
   lowStockThreshold: 10,
+  // Fields decoded from a scanned QR/barcode (see scanParser.js). All editable.
+  barcode: "",
+  modelNumber: "",
+  manufacturingDate: "",
+  serialCode: "",
 };
 
 function Field({ label, children }) {
@@ -32,6 +38,7 @@ export default function ProductFormModal({
   initial,
   lockBranch,
   scanCode,
+  prefill,
   onSaved,
 }) {
   const { categories, branches, addProduct, updateProduct } = useInventory();
@@ -52,12 +59,14 @@ export default function ProductFormModal({
               ...EMPTY,
               branchId: lockBranch || branches[0]?.id || "",
               category: categories[0]?.id || "",
+              // Values parsed from a not-found scan pre-populate the form.
+              ...(prefill || {}),
             }
       );
       setErrors({});
       /* eslint-enable react-hooks/set-state-in-effect */
     }
-  }, [open, initial, lockBranch, categories, branches]);
+  }, [open, initial, lockBranch, prefill, categories, branches]);
 
   function set(k, v) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -80,8 +89,8 @@ export default function ProductFormModal({
       categoryName: cat?.name,
     };
     // A barcode scanned in Check-In ("Add Product Manually") keeps the new
-    // product matchable by that code.
-    if (!isEdit && scanCode) payload.barcode = String(scanCode).trim();
+    // product matchable by that code. A code typed into the Barcode field wins.
+    if (!isEdit && scanCode && !payload.barcode) payload.barcode = String(scanCode).trim();
     setSaving(true);
     try {
       if (isEdit) await updateProduct(initial.id, payload);
@@ -114,6 +123,52 @@ export default function ProductFormModal({
             <span className="text-xs text-red-500">{errors.name}</span>
           )}
         </Field>
+
+        {/* Scan-decoded fields — barcode & model no. */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Barcode">
+            <input
+              className={`${inputCls} font-mono`}
+              value={form.barcode}
+              onChange={(e) => set("barcode", e.target.value)}
+              placeholder="Auto-generated if left blank"
+            />
+          </Field>
+          <Field label="Model Number">
+            <input
+              list="pfm-models"
+              className={`${inputCls} font-mono`}
+              value={form.modelNumber}
+              onChange={(e) => set("modelNumber", e.target.value)}
+              placeholder="e.g. RZMF125BRV169"
+            />
+            <datalist id="pfm-models">
+              {MODEL_NOS.map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
+          </Field>
+        </div>
+
+        {/* Scan-decoded fields — manufacturing date & serial/suffix. */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Manufacturing Date">
+            <input
+              className={inputCls}
+              value={form.manufacturingDate}
+              onChange={(e) => set("manufacturingDate", e.target.value)}
+              placeholder="MM-YYYY (e.g. 11-2025)"
+            />
+          </Field>
+          <Field label="Serial / Code">
+            <input
+              className={`${inputCls} font-mono`}
+              value={form.serialCode}
+              onChange={(e) => set("serialCode", e.target.value)}
+              placeholder="Trailing suffix, e.g. G"
+            />
+          </Field>
+        </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Category">

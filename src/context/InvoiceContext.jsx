@@ -74,11 +74,12 @@ export function InvoiceProvider({ children }) {
   const getPurchase = useCallback(async (id) => mapPurchaseFromApi(await Api.getPurchase(id)), []);
   const getSale = useCallback(async (id) => mapSaleFromApi(await Api.getSale(id)), []);
 
-  // body: { supplierId, supplierInvoiceNo, notes, lines:[{productId, quantity, price}] }
+  // body: { supplierInvoiceNo, notes, lines:[{productId, quantity, price}] }
+  // Supplier is no longer captured on check-in (optional server-side).
   const createPurchase = useCallback(
     async (form) => {
       const payload = {
-        supplier_id: form.supplierId,
+        supplier_id: form.supplierId || undefined,
         invoice_no: form.invoiceNo || undefined,
         supplier_invoice_no: form.supplierInvoiceNo || undefined,
         branch_id: form.branchId ?? undefined,

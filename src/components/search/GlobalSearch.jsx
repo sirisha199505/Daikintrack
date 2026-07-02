@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, X, Barcode, FileInput, FileOutput, Truck, UserSquare, Package } from "lucide-react";
+import { Search, X, Barcode, FileInput, FileOutput, UserSquare, Package } from "lucide-react";
 import { useReports } from "../../context/ReportsContext";
 
 const TYPES = [
@@ -8,11 +8,10 @@ const TYPES = [
   { id: "serial", label: "Serial" },
   { id: "invoice", label: "Invoice" },
   { id: "customer", label: "Customer" },
-  { id: "supplier", label: "Supplier" },
   { id: "product", label: "Product" },
 ];
 
-const EMPTY = { units: [], purchaseInvoices: [], salesInvoices: [], suppliers: [], customers: [], products: [] };
+const EMPTY = { units: [], purchaseInvoices: [], salesInvoices: [], customers: [], products: [] };
 
 // Universal inventory search for the app bar. Debounced; results grouped by type.
 export default function GlobalSearch() {
@@ -46,7 +45,6 @@ export default function GlobalSearch() {
     { key: "units", icon: Barcode, label: "Serials", items: res.units, render: (u) => u.serialNo, onPick: (u) => go(`/app/product-history?serial=${encodeURIComponent(u.serialNo)}`) },
     { key: "purchaseInvoices", icon: FileInput, label: "Purchases", items: res.purchaseInvoices, render: (i) => i.invoice_no, onPick: () => go("/app/purchase-invoices") },
     { key: "salesInvoices", icon: FileOutput, label: "Sales", items: res.salesInvoices, render: (i) => i.invoice_no, onPick: () => go("/app/sales-invoices") },
-    { key: "suppliers", icon: Truck, label: "Suppliers", items: res.suppliers, render: (s) => s.name, onPick: () => go("/app/suppliers") },
     { key: "customers", icon: UserSquare, label: "Customers", items: res.customers, render: (c) => c.name, onPick: () => go("/app/customers") },
     { key: "products", icon: Package, label: "Products", items: res.products, render: (p) => p.name, onPick: () => go("/app/stock") },
   ].filter((g) => (g.items || []).length > 0);

@@ -17,7 +17,6 @@ import ManageStock from "./pages/manager/ManageStock";
 import ManagerHistory from "./pages/manager/ManagerHistory";
 import RecentScans from "./pages/manager/RecentScans";
 
-import Suppliers from "./pages/admin/Suppliers";
 import Customers from "./pages/admin/Customers";
 import PurchaseInvoices from "./pages/manager/PurchaseInvoices";
 import SalesInvoices from "./pages/manager/SalesInvoices";
@@ -150,7 +149,6 @@ export default function App() {
         />
 
         {/* ===== Tally-style inventory ===== */}
-        <Route path="suppliers" element={<ProtectedRoute roles={["admin", "store_manager"]}><Suppliers /></ProtectedRoute>} />
         <Route path="customers" element={<ProtectedRoute roles={["admin", "store_manager"]}><Customers /></ProtectedRoute>} />
         <Route path="purchase-invoices" element={<ProtectedRoute roles={["admin", "store_manager"]}><PurchaseInvoices /></ProtectedRoute>} />
         <Route path="sales-invoices" element={<ProtectedRoute roles={["admin", "store_manager"]}><SalesInvoices /></ProtectedRoute>} />

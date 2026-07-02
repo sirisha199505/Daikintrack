@@ -69,6 +69,10 @@ export function InventoryProvider({ children }) {
         lowStockThreshold: p.low_stock_threshold ?? 10,
         price: p.price ?? 0, // whole rupees
         barcode: p.barcode,
+        // Fields decoded from the scanned QR/barcode payload (see scanParser.js).
+        modelNumber: p.model_number || "",
+        manufacturingDate: p.manufacturing_date || "",
+        serialCode: p.serial_code || "",
         // Tally-style lifecycle counters (available = sellable balance).
         availableQty: p.available_qty ?? p.stock ?? 0,
         purchasedQty: p.purchased_qty ?? 0,
@@ -92,6 +96,9 @@ export function InventoryProvider({ children }) {
         price: Number(form.price) || 0,
       };
       if (form.barcode) payload.barcode = String(form.barcode).trim();
+      if (form.modelNumber) payload.model_number = String(form.modelNumber).trim();
+      if (form.manufacturingDate) payload.manufacturing_date = String(form.manufacturingDate).trim();
+      if (form.serialCode) payload.serial_code = String(form.serialCode).trim();
       return payload;
     },
     [branchApiId, catApiId]

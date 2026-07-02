@@ -21,7 +21,7 @@ const EMPTY_DETAIL = { model: "", category: "", type: "", capacity: "", unit: ""
 // line entry and scan-to-add-line.
 export default function InvoiceFormModal({ open, onClose, mode = "purchase", onPosted, autoScan = false }) {
   const isSale = mode === "sale";
-  const { suppliers, customers } = useParties();
+  const { customers } = useParties();
   const { products, findByBarcode, lookupByBarcode, viewBranchId } = useInventory();
   const { createPurchase, createSale } = useInvoices();
   const { user } = useAuth();
@@ -46,7 +46,6 @@ export default function InvoiceFormModal({ open, onClose, mode = "purchase", onP
     }
   }, [open, mode, autoScan]);
 
-  const parties = isSale ? customers : suppliers;
   const branchId = viewBranchId || user?.branchId;
   // Sale lines are limited to products that currently have stock.
   const sellable = isSale ? products.filter((p) => (p.availableQty ?? 0) > 0) : products;
@@ -137,7 +136,8 @@ export default function InvoiceFormModal({ open, onClose, mode = "purchase", onP
   }
 
   async function submit() {
-    if (!partyId) return toast(`Select a ${isSale ? "customer" : "supplier"}`, "error");
+    // Purchases (Check-In) no longer capture a supplier; only sales need a party.
+    if (isSale && !partyId) return toast("Select a customer", "error");
     const valid = lines.filter((l) => l.productId && (l.quantity || 0) > 0);
     if (valid.length === 0) return toast("Add at least one line item", "error");
     if (isSale && valid.some((l) => (l.quantity || 0) > (l.maxQty ?? Infinity))) {
@@ -156,7 +156,7 @@ export default function InvoiceFormModal({ open, onClose, mode = "purchase", onP
       if (isSale) {
         await createSale({ customerId: Number(partyId), invoiceNo, branchId, notes, lines: valid, productDetails: details });
       } else {
-        await createPurchase({ supplierId: Number(partyId), invoiceNo, supplierInvoiceNo, branchId, notes, lines: valid, productDetails: details });
+        await createPurchase({ invoiceNo, supplierInvoiceNo, branchId, notes, lines: valid, productDetails: details });
       }
       toast(`${isSale ? "Sale" : "Purchase"} posted`, "success");
       onPosted?.();
@@ -179,13 +179,15 @@ export default function InvoiceFormModal({ open, onClose, mode = "purchase", onP
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-semibold text-slate-600">{isSale ? "Customer" : "Supplier"}</span>
-            <select className={inputCls} value={partyId} onChange={(e) => setPartyId(e.target.value)}>
-              <option value="">Select {isSale ? "customer" : "supplier"}…</option>
-              {parties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </label>
+          {isSale && (
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-semibold text-slate-600">Customer</span>
+              <select className={inputCls} value={partyId} onChange={(e) => setPartyId(e.target.value)}>
+                <option value="">Select customer…</option>
+                {customers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </label>
+          )}
           <label className="block">
             <span className="mb-1.5 block text-sm font-semibold text-slate-600">
               Invoice No. <span className="font-normal text-slate-400">(optional — auto if blank)</span>
@@ -194,8 +196,8 @@ export default function InvoiceFormModal({ open, onClose, mode = "purchase", onP
           </label>
           {!isSale && (
             <label className="block">
-              <span className="mb-1.5 block text-sm font-semibold text-slate-600">Supplier Invoice No.</span>
-              <input className={inputCls} value={supplierInvoiceNo} onChange={(e) => setSupplierInvoiceNo(e.target.value)} placeholder="Supplier's bill no." />
+              <span className="mb-1.5 block text-sm font-semibold text-slate-600">Bill / Reference No.</span>
+              <input className={inputCls} value={supplierInvoiceNo} onChange={(e) => setSupplierInvoiceNo(e.target.value)} placeholder="Vendor bill no. (optional)" />
             </label>
           )}
         </div>

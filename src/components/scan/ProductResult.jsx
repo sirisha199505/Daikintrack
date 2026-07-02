@@ -12,6 +12,9 @@ import {
   Minus,
   Plus,
   Barcode,
+  Cpu,
+  CalendarClock,
+  Hash,
 } from "lucide-react";
 import { Card, Button, Badge } from "../ui/Primitives";
 import { useInventory } from "../../context/InventoryContext";
@@ -54,6 +57,9 @@ export default function ProductResult({ product, onDone, onViewHistory }) {
   }
 
   const fields = [
+    { icon: Cpu, label: "Model Number", value: product.modelNumber || "—" },
+    { icon: CalendarClock, label: "Mfg. Date", value: product.manufacturingDate || "—" },
+    { icon: Hash, label: "Serial / Code", value: product.serialCode || "—" },
     { icon: Building2, label: "Branch", value: branch?.name || "—" },
     { icon: MapPin, label: "Location", value: branch?.location || "—" },
     { icon: Layers, label: "Category", value: product.categoryName },
