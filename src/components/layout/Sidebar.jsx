@@ -12,7 +12,7 @@ export default function Sidebar({ onNavigate }) {
     <div className="flex h-full flex-col bg-white">
       <nav className="flex-1 overflow-y-auto px-3 py-5">
         <div className="px-3 text-[11px] font-bold uppercase tracking-widest text-slate-400">
-          Navigation
+          General
         </div>
         <ul className="mt-3 space-y-1.5">
           {items.map((item) => (

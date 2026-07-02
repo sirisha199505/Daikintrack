@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-import { ScanLine, X, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { PackageX, PackagePlus, ArrowLeft, Save } from "lucide-react";
 import Modal from "../ui/Modal";
-import { Button } from "../ui/Primitives";
+import { Button, EmptyState } from "../ui/Primitives";
 import Scanner from "../scan/Scanner";
-import ProductFields from "../scan/ProductFields";
-import { lookupModel } from "../../lib/daikinMapping";
-import LineItemEditor from "./LineItemEditor";
-import { useParties } from "../../context/PartyContext";
+import ProductFormModal from "../products/ProductFormModal";
+import { parseScan } from "../../lib/scanParser";
+import { lookupModel, CATEGORIES, TYPES, UNITS, MODEL_NOS } from "../../lib/daikinMapping";
 import { useInventory } from "../../context/InventoryContext";
 import { useInvoices } from "../../context/InvoiceContext";
 import { useAuth } from "../../context/AuthContext";
@@ -15,223 +14,228 @@ import { useToast } from "../ui/Toast";
 const inputCls =
   "w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm outline-none focus:border-daikin-400 focus:bg-white focus:ring-2 focus:ring-daikin-100";
 
-const EMPTY_DETAIL = { model: "", category: "", type: "", capacity: "", unit: "" };
+const EMPTY_DRAFT = { name: "", category: "", type: "", model: "", capacity: "", unit: "" };
 
-// Create a purchase (Check-In) or sales (Check-Out) invoice. Supports manual
-// line entry and scan-to-add-line.
-export default function InvoiceFormModal({ open, onClose, mode = "purchase", onPosted, autoScan = false }) {
+function Field({ label, children }) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-sm font-semibold text-slate-600">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+// Scan-first Check-In (purchase) / Check-Out (sale) flow.
+//   Scan → parse code → fetch product → editable Product Details form → Save.
+// Each Save records exactly one unit (qty = 1). Reuses the existing Scanner,
+// scan parser, and createPurchase/createSale APIs. No customer/supplier capture.
+export default function InvoiceFormModal({ open, onClose, mode = "purchase", onPosted }) {
   const isSale = mode === "sale";
-  const { customers } = useParties();
-  const { products, findByBarcode, lookupByBarcode, viewBranchId } = useInventory();
+  const { lookupByBarcode, viewBranchId, refreshProducts } = useInventory();
   const { createPurchase, createSale } = useInvoices();
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [partyId, setPartyId] = useState("");
+  const [screen, setScreen] = useState("scan"); // 'scan' | 'form'
+  const [product, setProduct] = useState(null); // matched catalog product
+  const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [invoiceNo, setInvoiceNo] = useState("");
-  const [supplierInvoiceNo, setSupplierInvoiceNo] = useState("");
-  const [notes, setNotes] = useState("");
-  const [lines, setLines] = useState([]);
-  const [scanning, setScanning] = useState(false);
+  const [billRef, setBillRef] = useState("");
+  const [parsed, setParsed] = useState(null);
+  const [notFound, setNotFound] = useState("");
+  const [registering, setRegistering] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [productEntries, setProductEntries] = useState([]);
-  const [productDraft, setProductDraft] = useState(EMPTY_DETAIL);
+
+  const branchId = viewBranchId || user?.branchId;
 
   useEffect(() => {
     if (open) {
       /* eslint-disable react-hooks/set-state-in-effect */
-      setPartyId(""); setInvoiceNo(""); setSupplierInvoiceNo(""); setNotes(""); setLines([]); setScanning(autoScan);
-      setProductEntries([]); setProductDraft(EMPTY_DETAIL);
+      setScreen("scan"); setProduct(null); setDraft(EMPTY_DRAFT);
+      setInvoiceNo(""); setBillRef(""); setParsed(null); setNotFound(""); setRegistering(false); setSaving(false);
       /* eslint-enable react-hooks/set-state-in-effect */
     }
-  }, [open, mode, autoScan]);
+  }, [open, mode]);
 
-  const branchId = viewBranchId || user?.branchId;
-  // Sale lines are limited to products that currently have stock.
-  const sellable = isSale ? products.filter((p) => (p.availableQty ?? 0) > 0) : products;
-
-  // Auto-fill & auto-save the product-detail row for a scanned/typed Model No.
-  // Deduped by model — scanning the same model again won't add a duplicate row
-  // (the operator can still edit it below).
-  function autoSaveDetail(code) {
-    const hit = lookupModel(code);
-    if (!hit) return false;
-    setProductEntries((prev) => {
-      if (prev.some((e) => (e.model || "").toUpperCase() === hit.model.toUpperCase())) return prev;
-      return [...prev, {
-        model: hit.model,
-        category: hit.category,
-        type: hit.type,
-        capacity: hit.capacity == null ? "" : String(hit.capacity),
-        unit: hit.unit || "",
-      }];
+  // Prefill the details form from a matched product + its catalog model row.
+  function openForm(prod, info) {
+    const hit = lookupModel(prod.modelNumber || prod.barcode || info?.modelNumber);
+    setProduct(prod);
+    setDraft({
+      name: prod.name || "",
+      category: hit?.category || prod.categoryName || "",
+      type: hit?.type || "",
+      model: prod.modelNumber || hit?.model || info?.modelNumber || "",
+      capacity: hit?.capacity == null ? "" : String(hit.capacity),
+      unit: hit?.unit || "",
     });
-    toast(`Auto-filled ${hit.model} — ${hit.type}`, "success");
-    return true;
+    setScreen("form");
   }
 
-  // Find the matching catalog product for a code and add/increment its line.
-  // `silent` suppresses the "no product" warning (used when the code came from
-  // typing a Model No, where the detail auto-fill is the primary action).
-  function addProductLine(code, { silent = false } = {}) {
-    const p = findByBarcode(code);
-    const resolve = p ? Promise.resolve(p) : lookupByBarcode(code).catch(() => null);
-    Promise.resolve(resolve).then((prod) => {
-      if (!prod) return silent ? undefined : toast(`No product for ${code}`, "error");
-      if (isSale && (prod.availableQty ?? 0) <= 0) return toast(`${prod.name} is out of stock`, "error");
-      setLines((prev) => {
-        const idx = prev.findIndex((l) => String(l.productId) === String(prod.id));
-        if (idx >= 0) {
-          const copy = [...prev];
-          const cap = isSale ? prod.availableQty ?? 0 : Infinity;
-          copy[idx] = { ...copy[idx], quantity: Math.min(cap, (copy[idx].quantity || 0) + 1) };
-          return copy;
+  // Scanner / manual entry result → parse, fetch the product, open the form.
+  async function onResult(code) {
+    const info = parseScan(code);
+    setParsed(info);
+    try {
+      const prod = await lookupByBarcode(info.barcode);
+      if (prod) {
+        if (isSale && (prod.availableQty ?? 0) <= 0) {
+          toast(`${prod.name} is out of stock`, "error");
+          return;
         }
-        return [...prev, { productId: prod.id, productName: prod.name, barcode: prod.barcode, quantity: 1, price: prod.price, maxQty: isSale ? prod.availableQty ?? 0 : 0 }];
-      });
-      toast(`Added ${prod.name}`, "success");
-    });
-  }
-
-  // Scanner / manual-code path: auto-fill the details AND add the product line.
-  function addScanned(code) {
-    autoSaveDetail(code);
-    addProductLine(code);
-  }
-
-  // Model No picked in the Product Details fields → also pull in the product
-  // line automatically (quietly if there's no matching catalog product).
-  function handleModelPicked(model) {
-    if (model) addProductLine(model, { silent: true });
-  }
-
-  // A product picked in a line-item dropdown → auto-fill the Product Details
-  // above from that product's Model No (barcode).
-  function handleLineProductPicked(prod) {
-    const hit = prod && lookupModel(prod.barcode);
-    if (!hit) return;
-    setProductDraft({
-      model: hit.model,
-      category: hit.category,
-      type: hit.type,
-      capacity: hit.capacity == null ? "" : String(hit.capacity),
-      unit: hit.unit || "",
-    });
-  }
-
-  // The Product Details the operator entered — saved rows plus the current
-  // (unsaved) draft — as normalized Model Nos.
-  function detailModels() {
-    return [...productEntries.map((e) => e.model), productDraft.model]
-      .map((m) => String(m || "").trim().toUpperCase())
-      .filter(Boolean);
-  }
-
-  // Every Model No in the Product Details must match a selected product.
-  function mismatchedModel(validLines) {
-    const barcodes = validLines
-      .map((l) => String(l.barcode || "").trim().toUpperCase())
-      .filter(Boolean);
-    return detailModels().find((m) => !barcodes.includes(m)) || null;
-  }
-
-  async function submit() {
-    // Purchases (Check-In) no longer capture a supplier; only sales need a party.
-    if (isSale && !partyId) return toast("Select a customer", "error");
-    const valid = lines.filter((l) => l.productId && (l.quantity || 0) > 0);
-    if (valid.length === 0) return toast("Add at least one line item", "error");
-    if (isSale && valid.some((l) => (l.quantity || 0) > (l.maxQty ?? Infinity))) {
-      return toast("A line exceeds available stock", "error");
+        openForm(prod, info);
+      } else {
+        setNotFound(info.barcode || code);
+      }
+    } catch {
+      setNotFound(info.barcode || code);
     }
-    const badModel = mismatchedModel(valid);
-    if (badModel) {
-      return toast(`Product Details "${badModel}" don't match the selected product. Fix the details or the product line.`, "error");
+  }
+
+  // Model No edit auto-fills Category / Type / Capacity / Unit from the catalog.
+  function setField(patch) {
+    if (patch.model !== undefined) {
+      const hit = lookupModel(patch.model);
+      if (hit) {
+        patch = {
+          ...patch,
+          category: hit.category,
+          type: hit.type,
+          capacity: hit.capacity == null ? "" : String(hit.capacity),
+          unit: hit.unit || "",
+        };
+      }
     }
-    // Include the unsaved draft row too, so a filled-but-not-"Saved" detail
-    // still persists with the invoice.
-    const draftFilled = productDraft.model || productDraft.category || productDraft.type || productDraft.capacity || productDraft.unit;
-    const details = draftFilled ? [...productEntries, productDraft] : productEntries;
+    setDraft((d) => ({ ...d, ...patch }));
+  }
+
+  async function save() {
+    if (!product) return;
+    const details = [{
+      name: draft.name || product.name,
+      model: draft.model, category: draft.category, type: draft.type,
+      capacity: draft.capacity, unit: draft.unit,
+    }];
+    const line = {
+      productId: product.id,
+      productName: draft.name || product.name,
+      barcode: product.barcode,
+      quantity: 1,
+      price: product.price || 0,
+      maxQty: isSale ? product.availableQty ?? 0 : 0,
+    };
     setSaving(true);
     try {
       if (isSale) {
-        await createSale({ customerId: Number(partyId), invoiceNo, branchId, notes, lines: valid, productDetails: details });
+        await createSale({ invoiceNo, branchId, lines: [line], productDetails: details });
       } else {
-        await createPurchase({ invoiceNo, supplierInvoiceNo, branchId, notes, lines: valid, productDetails: details });
+        await createPurchase({ invoiceNo, supplierInvoiceNo: billRef, branchId, lines: [line], productDetails: details });
       }
-      toast(`${isSale ? "Sale" : "Purchase"} posted`, "success");
+      toast(isSale ? "Checked out" : "Checked in", "success");
       onPosted?.();
       onClose();
     } catch (e) {
-      toast(e.message || "Failed to post invoice.", "error");
+      toast(e.message || "Failed to save.", "error");
     } finally {
       setSaving(false);
     }
   }
 
-  const title = isSale ? "New Sales Invoice (Check-Out)" : "New Purchase Invoice (Check-In)";
+  const title = isSale ? "Check-Out" : "Check-In";
 
   return (
-    <Modal open={open} onClose={onClose} title={title} size="xl">
-      <div className="space-y-5 p-6">
-        <div className={`flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold ${isSale ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-700"}`}>
-          {isSale ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownLeft className="h-4 w-4" />}
-          {isSale ? "Selling stock — units are allocated FIFO and marked sold." : "Receiving stock — a unique serial is generated for every unit."}
-        </div>
+    <>
+      <Modal open={open} onClose={onClose} title={title} size="md">
+        <div className="p-5">
+          {screen === "form" ? (
+            <div className="space-y-4">
+              <datalist id="ifm-models">{MODEL_NOS.map((m) => <option key={m} value={m} />)}</datalist>
+              <datalist id="ifm-categories">{CATEGORIES.map((c) => <option key={c} value={c} />)}</datalist>
+              <datalist id="ifm-types">{TYPES.map((t) => <option key={t} value={t} />)}</datalist>
+              <datalist id="ifm-units">{UNITS.map((u) => <option key={u} value={u} />)}</datalist>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {isSale && (
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-semibold text-slate-600">Customer</span>
-              <select className={inputCls} value={partyId} onChange={(e) => setPartyId(e.target.value)}>
-                <option value="">Select customer…</option>
-                {customers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </label>
-          )}
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-semibold text-slate-600">
-              Invoice No. <span className="font-normal text-slate-400">(optional — auto if blank)</span>
-            </span>
-            <input className={`${inputCls} font-mono`} value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} placeholder={isSale ? "SINV-2026-…" : "PINV-2026-…"} />
-          </label>
-          {!isSale && (
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-semibold text-slate-600">Bill / Reference No.</span>
-              <input className={inputCls} value={supplierInvoiceNo} onChange={(e) => setSupplierInvoiceNo(e.target.value)} placeholder="Vendor bill no. (optional)" />
-            </label>
-          )}
-        </div>
+              <Field label="Product">
+                <input className={inputCls} value={draft.name} onChange={(e) => setField({ name: e.target.value })} placeholder="Product name" />
+              </Field>
 
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm font-bold text-slate-700">Line Items</span>
-            <Button type="button" variant={scanning ? "danger" : "outline"} size="sm" onClick={() => setScanning((s) => !s)}>
-              {scanning ? <><X className="h-4 w-4" /> Close scanner</> : <><ScanLine className="h-4 w-4" /> Scan to add</>}
-            </Button>
-          </div>
-          {scanning && (
-            <div className="mb-4 rounded-xl border border-slate-200 p-3">
-              <Scanner onResult={(code) => addScanned(code)} />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Category">
+                  <input list="ifm-categories" className={inputCls} value={draft.category} onChange={(e) => setField({ category: e.target.value })} placeholder="Type or pick…" />
+                </Field>
+                <Field label="Type">
+                  <input list="ifm-types" className={inputCls} value={draft.type} onChange={(e) => setField({ type: e.target.value })} placeholder="Type or pick…" />
+                </Field>
+                <Field label="Model No">
+                  <input list="ifm-models" className={`${inputCls} font-mono`} value={draft.model} onChange={(e) => setField({ model: e.target.value })} placeholder="Auto-fills the rest" />
+                </Field>
+                <Field label="Capacity">
+                  <input type="number" step="0.01" className={inputCls} value={draft.capacity} onChange={(e) => setField({ capacity: e.target.value })} placeholder="Auto-fills from Model" />
+                </Field>
+                <Field label="Unit">
+                  <input list="ifm-units" className={inputCls} value={draft.unit} onChange={(e) => setField({ unit: e.target.value })} placeholder="Type or pick…" />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Invoice No.">
+                  <input className={`${inputCls} font-mono`} value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} placeholder={isSale ? "SINV-2026- (auto if blank)" : "PINV-2026- (auto if blank)"} />
+                </Field>
+                {!isSale && (
+                  <Field label="Bill / Reference No.">
+                    <input className={inputCls} value={billRef} onChange={(e) => setBillRef(e.target.value)} placeholder="Vendor bill no. (optional)" />
+                  </Field>
+                )}
+              </div>
+
+              <div className="flex justify-between gap-3 pt-1">
+                <Button type="button" variant="subtle" onClick={() => setScreen("scan")} disabled={saving}>
+                  <ArrowLeft className="h-4 w-4" /> Scan again
+                </Button>
+                <Button type="button" variant={isSale ? "danger" : "primary"} onClick={save} disabled={saving}>
+                  <Save className="h-4 w-4" /> {saving ? "Saving…" : "Save"}
+                </Button>
+              </div>
             </div>
+          ) : notFound ? (
+            <EmptyState
+              icon={PackageX}
+              title="Product not registered"
+              subtitle={`No product matches barcode "${notFound}". Register it, then it can be ${isSale ? "checked out" : "checked in"}.`}
+              action={
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {!isSale && (
+                    <Button onClick={() => setRegistering(true)}>
+                      <PackagePlus className="h-4 w-4" /> Register product
+                    </Button>
+                  )}
+                  <Button variant="outline" onClick={() => setNotFound("")}>Scan again</Button>
+                </div>
+              }
+            />
+          ) : (
+            <Scanner onResult={onResult} />
           )}
-          <ProductFields draft={productDraft} onDraftChange={setProductDraft} entries={productEntries} onEntriesChange={setProductEntries} onModelPicked={handleModelPicked} />
-          <div className="mt-4">
-            <LineItemEditor mode={mode} lines={lines} setLines={setLines} products={sellable} onProductPicked={handleLineProductPicked} />
-          </div>
         </div>
+      </Modal>
 
-        <label className="block">
-          <span className="mb-1.5 block text-sm font-semibold text-slate-600">Notes</span>
-          <textarea className={inputCls} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </label>
-
-        <div className="flex justify-end gap-3">
-          <Button type="button" variant="subtle" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button type="button" variant={isSale ? "danger" : "primary"} onClick={submit} disabled={saving}>
-            {saving ? "Confirming…" : isSale ? "Confirm Sale" : "Confirm Purchase"}
-          </Button>
-        </div>
-      </div>
-    </Modal>
+      {/* Register a not-found product, then continue into the details form. */}
+      <ProductFormModal
+        open={registering}
+        onClose={() => setRegistering(false)}
+        prefill={parsed ? {
+          barcode: parsed.barcode,
+          modelNumber: parsed.modelNumber,
+          manufacturingDate: parsed.manufacturingDate,
+          serialCode: parsed.suffix,
+          name: parsed.model ? `${parsed.model.model} ${parsed.model.type}`.trim() : "",
+        } : null}
+        onSaved={async () => {
+          setRegistering(false);
+          await refreshProducts();
+          const prod = await lookupByBarcode(notFound).catch(() => null);
+          if (prod) { setNotFound(""); openForm(prod, parsed); }
+        }}
+      />
+    </>
   );
 }

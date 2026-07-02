@@ -74,6 +74,31 @@ export function InvoiceProvider({ children }) {
   const getPurchase = useCallback(async (id) => mapPurchaseFromApi(await Api.getPurchase(id)), []);
   const getSale = useCallback(async (id) => mapSaleFromApi(await Api.getSale(id)), []);
 
+  // Edit a check-in / check-out's descriptive fields; returns the mapped invoice.
+  const updatePurchase = useCallback(async (id, payload) => {
+    const updated = mapPurchaseFromApi(await Api.updatePurchase(id, payload));
+    setPurchases((prev) => prev.map((p) => (p.id === id ? { ...p, ...updated } : p)));
+    return updated;
+  }, []);
+  const updateSale = useCallback(async (id, payload) => {
+    const updated = mapSaleFromApi(await Api.updateSale(id, payload));
+    setSales((prev) => prev.map((s) => (s.id === id ? { ...s, ...updated } : s)));
+    return updated;
+  }, []);
+
+  // Void a check-in / check-out. The backend reverses stock & serials, so we
+  // drop the row locally and refresh product balances.
+  const deletePurchase = useCallback(async (id) => {
+    await Api.deletePurchase(id);
+    setPurchases((prev) => prev.filter((p) => p.id !== id));
+    refreshProducts();
+  }, [refreshProducts]);
+  const deleteSale = useCallback(async (id) => {
+    await Api.deleteSale(id);
+    setSales((prev) => prev.filter((s) => s.id !== id));
+    refreshProducts();
+  }, [refreshProducts]);
+
   // body: { supplierInvoiceNo, notes, lines:[{productId, quantity, price}] }
   // Supplier is no longer captured on check-in (optional server-side).
   const createPurchase = useCallback(
@@ -102,7 +127,7 @@ export function InvoiceProvider({ children }) {
   const createSale = useCallback(
     async (form) => {
       const payload = {
-        customer_id: form.customerId,
+        customer_id: form.customerId || undefined,
         invoice_no: form.invoiceNo || undefined,
         branch_id: form.branchId ?? undefined,
         notes: form.notes || undefined,
@@ -161,11 +186,12 @@ export function InvoiceProvider({ children }) {
     () => ({
       purchases, sales, loading,
       refreshPurchases, refreshSales, refreshAll, getPurchase, getSale,
-      createPurchase, createSale, createReturn, createReplacement,
-      inspectUnit, disposeUnit, repairCompleteUnit,
+      createPurchase, createSale, updatePurchase, updateSale, deletePurchase, deleteSale,
+      createReturn, createReplacement, inspectUnit, disposeUnit, repairCompleteUnit,
     }),
     [purchases, sales, loading, refreshPurchases, refreshSales, refreshAll,
-     getPurchase, getSale, createPurchase, createSale, createReturn,
+     getPurchase, getSale, createPurchase, createSale, updatePurchase, updateSale,
+     deletePurchase, deleteSale, createReturn,
      createReplacement, inspectUnit, disposeUnit, repairCompleteUnit]
   );
 

@@ -373,6 +373,8 @@ export function mapPurchaseFromApi(p) {
     branchId: slugFor(p.branch_id), branchName: p.branch_name, status: p.status,
     totalQty: p.total_qty ?? 0, totalAmount: p.total_amount ?? 0, notes: p.notes,
     actor: p.actor, date: p.occurred_at, lineCount: p.line_count, unitCount: p.unit_count,
+    productName: p.product_name, categoryName: p.category_name,
+    productDetails: p.product_details || [],
     lines: (p.items || []).map(mapInvoiceLineFromApi),
   };
 }
@@ -383,6 +385,8 @@ export function mapSaleFromApi(s) {
     branchId: slugFor(s.branch_id), branchName: s.branch_name, status: s.status,
     totalQty: s.total_qty ?? 0, totalAmount: s.total_amount ?? 0, notes: s.notes,
     actor: s.actor, date: s.occurred_at, lineCount: s.line_count, unitCount: s.unit_count,
+    productName: s.product_name, categoryName: s.category_name,
+    productDetails: s.product_details || [],
     lines: (s.items || []).map(mapInvoiceLineFromApi),
   };
 }
@@ -634,6 +638,22 @@ export const Api = {
   async createSale(payload) {
     const res = await apiRequest("/sales", { method: "POST", body: payload });
     return res.data;
+  },
+  // Edit a check-in / check-out's descriptive fields (not stock quantities).
+  async updatePurchase(id, payload) {
+    const res = await apiRequest(`/purchases/${id}`, { method: "PUT", body: payload });
+    return res.data;
+  },
+  async updateSale(id, payload) {
+    const res = await apiRequest(`/sales/${id}`, { method: "PUT", body: payload });
+    return res.data;
+  },
+  // Void a check-in / check-out (reverses stock & serials server-side).
+  async deletePurchase(id) {
+    await apiRequest(`/purchases/${id}`, { method: "DELETE" });
+  },
+  async deleteSale(id) {
+    await apiRequest(`/sales/${id}`, { method: "DELETE" });
   },
 
   // ---- Returns / quarantine / replacements ----

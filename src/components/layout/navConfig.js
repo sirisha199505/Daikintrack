@@ -4,7 +4,6 @@ import {
   ScanLine,
   ClipboardList,
   History,
-  PackageSearch,
   Users,
   Building2,
   Tags,
@@ -30,19 +29,15 @@ export const NAV = {
     { to: "/app/customers", label: "Customers", short: "Customers", icon: UserSquare },
     { to: "/app/reports", label: "Reports", short: "Reports", icon: BarChart3, primary: true },
   ],
-  // Store Manager — operational: invoicing, stock, quarantine, ledger.
+  // Store Manager — operational: check-in/out, received/sold/dead stock, tracing.
   store_manager: [
     { to: "/app/dashboard", label: "Dashboard", short: "Dashboard", icon: LayoutDashboard, primary: true },
     { to: "/app/scan", label: "Check In / Out", short: "Scan", icon: ScanLine, primary: true },
-    { to: "/app/purchase-invoices", label: "Purchase Invoices", short: "Purchases", icon: FileInput },
-    { to: "/app/sales-invoices", label: "Sales Invoices", short: "Sales", icon: FileOutput },
-    { to: "/app/stock", label: "Manage Stock", short: "Stock", icon: PackageSearch, primary: true },
-    { to: "/app/quarantine", label: "Quarantine & Returns", short: "Returns", icon: ShieldAlert },
-    { to: "/app/customers", label: "Customers", short: "Customers", icon: UserSquare },
-    { to: "/app/ledger", label: "Inventory Ledger", short: "Ledger", icon: BookOpen },
+    { to: "/app/purchase-invoices", label: "Received Stock", short: "Received", icon: FileInput, primary: true },
+    { to: "/app/sales-invoices", label: "Stock Sold", short: "Sold", icon: FileOutput, primary: true },
+    { to: "/app/quarantine", label: "Dead Stock", short: "Dead", icon: ShieldAlert },
     { to: "/app/product-history", label: "Product History", short: "Trace", icon: ClipboardList },
     { to: "/app/copper", label: "CopperScan", short: "Copper", icon: Cable },
-    { to: "/app/history", label: "History", short: "History", icon: History },
   ],
   // Distributor — inventory visibility & reporting.
   distributor: [

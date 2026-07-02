@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowDownLeft, ArrowUpRight, ScanLine, FileInput, FileOutput } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ScanLine } from "lucide-react";
 import { Card, Button } from "../../components/ui/Primitives";
 import InvoiceFormModal from "../../components/invoices/InvoiceFormModal";
 
@@ -27,9 +27,6 @@ export default function ScanInOut() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-800">Check In / Check Out</h1>
-        <p className="text-sm text-slate-500">
-          Scan or pick products to build a Purchase (Check-In) or Sales (Check-Out) invoice.
-        </p>
       </div>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -37,22 +34,17 @@ export default function ScanInOut() {
           tone="in"
           icon={ArrowDownLeft}
           title="Check In"
-          subtitle="Receive stock from a supplier. A unique serial is generated for every unit."
-          cta={<Button size="lg" className="w-full" onClick={() => pick("purchase")}><FileInput className="h-4 w-4" /> New Purchase Invoice</Button>}
+          subtitle="Click Scan to register the product receiving."
+          cta={<Button size="lg" className="w-full" onClick={() => pick("purchase")}><ScanLine className="h-4 w-4" /> Scan</Button>}
         />
         <ActionCard
           tone="out"
           icon={ArrowUpRight}
           title="Check Out"
-          subtitle="Sell stock to a customer. Units are allocated FIFO and marked sold."
-          cta={<Button size="lg" variant="danger" className="w-full" onClick={() => pick("sale")}><FileOutput className="h-4 w-4" /> New Sales Invoice</Button>}
+          subtitle="Click Scan to register the product being sold."
+          cta={<Button size="lg" variant="danger" className="w-full" onClick={() => pick("sale")}><ScanLine className="h-4 w-4" /> Scan</Button>}
         />
       </div>
-
-      <Card className="flex items-center gap-3 p-4 text-sm text-slate-500">
-        <ScanLine className="h-5 w-5 shrink-0 text-daikin-500" />
-        Tip: inside either invoice, tap <span className="font-semibold text-slate-700">Scan to add</span> to add line items by barcode or QR.
-      </Card>
 
       <InvoiceFormModal open={mode === "purchase"} mode="purchase" autoScan={autoScan} onClose={() => setMode(null)} />
       <InvoiceFormModal open={mode === "sale"} mode="sale" autoScan={autoScan} onClose={() => setMode(null)} />
